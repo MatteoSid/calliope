@@ -16,7 +16,12 @@ bot.
 """
 
 import logging
-from telegram import ForceReply, Update, Bot, File
+from datetime import datetime
+from pathlib import Path
+
+import torch
+import whisper
+from telegram import Bot, File, ForceReply, Update
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -24,9 +29,6 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-
-from pathlib import Path
-from datetime import datetime
 
 Path("voice_msgs").mkdir(parents=True, exist_ok=True)
 
@@ -69,7 +71,13 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     file_name = rf'voice_msgs\new_file_{datetime.now().strftime("%Y%m%d_%H%M%S")}.wav'
     print(file_name)
     await new_file.download_to_drive(file_name)
-    await update.message.reply_text(update)
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(device)
+    model = whisper.load_model("large").to(device)
+    result = model.transcribe(file_name)
+
+    await update.message.reply_text(result["text"])
 
 
 """
@@ -86,7 +94,7 @@ def main() -> None:
     # Create the Application and pass it your bot's token.
     application = (
         Application.builder()
-        .token("YOUR_TOKEN")
+        .token("1712487565:AAF68Bsmui1hjQskz2wpXVFlyfLOCxtaFKU")
         .build()
     )
 
