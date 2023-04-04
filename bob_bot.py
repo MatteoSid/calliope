@@ -15,6 +15,7 @@ Press Ctrl-C on the command line or send a signal to the process to stop the
 bot.
 """
 
+
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -37,8 +38,9 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-
+TOKEN = Path("TOKEN.txt").read_text()
 logger = logging.getLogger(__name__)
+
 
 
 # Define a few command handlers. These usually take the two arguments update and
@@ -94,7 +96,7 @@ def main() -> None:
     # Create the Application and pass it your bot's token.
     application = (
         Application.builder()
-        .token("1712487565:AAF68Bsmui1hjQskz2wpXVFlyfLOCxtaFKU")
+        .token(TOKEN)
         .build()
     )
 
