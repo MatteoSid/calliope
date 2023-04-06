@@ -85,6 +85,8 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         model = whisper.load_model("large").to(device)
         result = model.transcribe(file_name)
+        del model
+        torch.cuda.empty_cache()
 
         logger.info(result["text"])
         await update.message.reply_text(result["text"])
