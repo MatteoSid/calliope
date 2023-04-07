@@ -189,7 +189,6 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         for msg in msgs_list:
             logger.info(f"Transcription: {msg}")
             await update.message.reply_text(msg)
-            logger.info(f"massege id: {update.message.message_id}")
 
     except Exception as e:
         logger.error(e)
