@@ -19,10 +19,12 @@ bot.
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import List
 
+import librosa
+import numpy as np
 import torch
-import whisper
-from telegram import Bot, File, ForceReply, Update
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -30,6 +32,10 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from transformers import WhisperForConditionalGeneration, WhisperProcessor
+from rich.progress import track
+from scipy.signal import resample
+
 
 Path("voice_msgs").mkdir(parents=True, exist_ok=True)
 
@@ -40,6 +46,28 @@ logging.basicConfig(
 
 TOKEN = Path("TOKEN.txt").read_text()
 logger = logging.getLogger(__name__)
+
+
+def split_string(string: str) -> List[str]:
+    """
+    Split a string into a list of strings of length < 4096.
+    :param string: the string to split
+    :return: a list of strings
+    """
+    if len(string) < 4096:
+        return [string]
+    else:
+        words = string.split()
+        result = []
+        current_string = ""
+        for word in words:
+            if len(current_string) + len(word) + 1 > 4096:
+                result.append(current_string)
+                current_string = word
+            else:
+                current_string += " " + word
+        result.append(current_string)
+        return result
 
 
 # Define a few command handlers. These usually take the two arguments update and
@@ -83,15 +111,61 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        model = whisper.load_model("large").to(device)
-        result = model.transcribe(file_name)
-        del model
-        torch.cuda.empty_cache()
 
-        logger.info(result["text"])
-        await update.message.reply_text(result["text"])
+        model_name = "openai/whisper-large-v2"
+        processor = WhisperProcessor.from_pretrained(model_name)
+        model = WhisperForConditionalGeneration.from_pretrained(model_name).to(device)
+
+        model.config.forced_decoder_ids = processor.get_decoder_prompt_ids(
+            language="it",
+            task="transcribe",
+        )
+
+        audio, sr = librosa.load(file_name)
+        # Define the new sample rate.
+        new_sr = 16000
+
+        # Calculate the number of samples in the resampled signal.
+        num_samples = int(len(audio) * new_sr / sr)
+
+        # Resample the audio signal.
+        resampled_audio = resample(audio, num_samples)
+        # Calculate the number of samples per chunk.
+        samples_per_chunk = 20 * new_sr
+
+        # Calculate the number of chunks.
+        num_chunks = int(np.ceil(len(resampled_audio) / samples_per_chunk))
+
+        # Split the resampled audio into chunks.
+        chunks = np.array_split(resampled_audio, num_chunks)
+
+        decoded_message: str = ""
+        for chunk in track(chunks, description="[green]Processing data"):
+            input_features = processor(
+                chunk, return_tensors="pt", sampling_rate=new_sr
+            ).input_features
+            predicted_ids = model.generate(
+                input_features.to(device),
+                is_multilingual=True,
+                max_length=10000,
+            )
+            transcription = processor.batch_decode(
+                predicted_ids, skip_special_tokens=True
+            )
+
+            decoded_message += transcription[0]
+
+        msgs_list = split_string(decoded_message)
+        for msg in msgs_list:
+            logger.info(f"Transcription: {msg}")
+            await update.message.reply_text(msg)
+
     except Exception as e:
-        await update.message.reply_text(e.message)
+        logger.error(e)
+        await update.message.reply_text(e)
+
+    del model
+    torch.cuda.empty_cache()
 
 
 def main() -> None:
