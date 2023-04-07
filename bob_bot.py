@@ -19,6 +19,7 @@ bot.
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import List
 
 import librosa
 import numpy as np
@@ -45,6 +46,28 @@ logging.basicConfig(
 
 TOKEN = Path("TOKEN.txt").read_text()
 logger = logging.getLogger(__name__)
+
+
+def split_string(string: str) -> List[str]:
+    """
+    Split a string into a list of strings of length < 4096.
+    :param string: the string to split
+    :return: a list of strings
+    """
+    if len(string) < 4096:
+        return [string]
+    else:
+        words = string.split()
+        result = []
+        current_string = ""
+        for word in words:
+            if len(current_string) + len(word) + 1 > 4096:
+                result.append(current_string)
+                current_string = word
+            else:
+                current_string += " " + word
+        result.append(current_string)
+        return result
 
 
 # Define a few command handlers. These usually take the two arguments update and
@@ -132,9 +155,13 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
             decoded_message += transcription[0]
 
-        logger.info(f"Transcription: {decoded_message}")
-        await update.message.reply_text(decoded_message)
+        msgs_list = split_string(decoded_message)
+        for msg in msgs_list:
+            logger.info(f"Transcription: {msg}")
+            await update.message.reply_text(msg)
+
     except Exception as e:
+        logger.error(e)
         await update.message.reply_text(e)
 
     del model
