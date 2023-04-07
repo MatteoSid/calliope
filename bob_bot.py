@@ -17,6 +17,8 @@ bot.
 
 
 import logging
+import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import List
@@ -24,6 +26,8 @@ from typing import List
 import librosa
 import numpy as np
 import torch
+from rich.progress import track
+from scipy.signal import resample
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -33,14 +37,6 @@ from telegram.ext import (
     filters,
 )
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
-from rich.progress import track
-from scipy.signal import resample
-from bob_telegram_tools.utils import TelegramTqdm
-from bob_telegram_tools.bot import TelegramBot
-from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
-import time
-
 
 Path("voice_msgs").mkdir(parents=True, exist_ok=True)
 
@@ -105,14 +101,10 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     file_id = update.message.voice.file_id
     new_file = await context.bot.get_file(file_id)
 
-    try:
-        file_name = rf'voice_msgs\{update.message.chat.username}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.wav'
-    except:
-        file_name = (
-            rf'voice_msgs\new_file_{datetime.now().strftime("%Y%m%d_%H%M%S")}.wav'
-        )
-
-    await new_file.download_to_drive(file_name)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        file_path = os.path.join(temp_dir, "temp_file")
+        await new_file.download_to_drive(file_path)
+        audio, sr = librosa.load(file_path)
 
     try:
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -128,7 +120,6 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             task="transcribe",
         )
 
-        audio, sr = librosa.load(file_name)
         # Define the new sample rate.
         new_sr = 16000
 
