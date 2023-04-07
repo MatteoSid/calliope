@@ -35,6 +35,11 @@ from telegram.ext import (
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
 from rich.progress import track
 from scipy.signal import resample
+from bob_telegram_tools.utils import TelegramTqdm
+from bob_telegram_tools.bot import TelegramBot
+from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
+import time
 
 
 Path("voice_msgs").mkdir(parents=True, exist_ok=True)
@@ -114,6 +119,8 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         model_name = "openai/whisper-large-v2"
         processor = WhisperProcessor.from_pretrained(model_name)
+
+        message = await update.message.reply_text("Loading model...")
         model = WhisperForConditionalGeneration.from_pretrained(model_name).to(device)
 
         model.config.forced_decoder_ids = processor.get_decoder_prompt_ids(
@@ -140,7 +147,15 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         chunks = np.array_split(resampled_audio, num_chunks)
 
         decoded_message: str = ""
-        for chunk in track(chunks, description="[green]Processing data"):
+        # Create a progress bar
+        current_percentage = 0
+        await context.bot.edit_message_text(
+            text=f"Processing data: {current_percentage}%",
+            chat_id=message.chat_id,
+            message_id=message.message_id,
+        )
+
+        for i, chunk in enumerate(track(chunks, description="[green]Processing data")):
             input_features = processor(
                 chunk, return_tensors="pt", sampling_rate=new_sr
             ).input_features
@@ -155,14 +170,30 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
             decoded_message += transcription[0]
 
+            # Update the progress bar
+            current_percentage = int((i + 1) / num_chunks * 100)
+            text = f"Processing data: {current_percentage}%"
+            await context.bot.edit_message_text(
+                text=text,
+                chat_id=message.chat_id,
+                message_id=message.message_id,
+            )
+
+        # Delete the progress bar
+        await context.bot.delete_message(
+            chat_id=message.chat_id,
+            message_id=message.message_id,
+        )
+
         msgs_list = split_string(decoded_message)
         for msg in msgs_list:
             logger.info(f"Transcription: {msg}")
             await update.message.reply_text(msg)
+            logger.info(f"massege id: {update.message.message_id}")
 
     except Exception as e:
         logger.error(e)
-        await update.message.reply_text(e)
+        await update.message.reply_text(str(e))
 
     del model
     torch.cuda.empty_cache()
