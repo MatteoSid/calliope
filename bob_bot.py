@@ -19,15 +19,11 @@ bot.
 import logging
 import os
 import tempfile
-from datetime import datetime
 from pathlib import Path
 from typing import List
 
 import librosa
-import numpy as np
-import torch
 from rich.progress import track
-from scipy.signal import resample
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -36,9 +32,8 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from transformers import WhisperForConditionalGeneration, WhisperProcessor
 
-Path("voice_msgs").mkdir(parents=True, exist_ok=True)
+from inference_model import whisper_inference_model
 
 # Enable logging
 logging.basicConfig(
@@ -47,6 +42,8 @@ logging.basicConfig(
 
 TOKEN = Path("TOKEN.txt").read_text()
 logger = logging.getLogger(__name__)
+
+whisper = whisper_inference_model(new_sample_rate=16000, seconds_per_chunk=20)
 
 
 def split_string(string: str) -> List[str]:
@@ -77,7 +74,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
     user = update.effective_user
     await update.message.reply_html(
-        f"Hi {user.mention_html()}, this bot converts any voice message into text.\n\nSend or forward any voice message here and you will immediately receive the transcription.\n\nHave fun!!",
+        f"Hi {user.mention_html()}, this bot converts any voice message into text.\n\nSend or forward any voice message here and you will immediately receive the transcription.\n\nYou can also add the bot to a group and by setting it as an administrator it will convert all the audio sent in the group.\n\nHave fun!!",
         # reply_markup=ForceReply(selective=True),
     )
 
@@ -86,13 +83,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """Send a message when the command /help is issued."""
     await update.message.reply_text(
         "This bot converts any voice message into a text message. All you have to do is forward any voice message to the bot and you will immediately receive the corresponding text message."
-        + "The processing time is proportional to the duration of the voice message.\n\nNote: for the moment only messages shorter than four minutes are supported."
+        + "The processing time is proportional to the duration of the voice message.\n\nYou can also add the bot to a group and by setting it as an administrator it will convert all the audio sent in the group."
     )
-
-
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Echo the user message."""
-    await update.message.reply_text(update)
 
 
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -107,55 +99,30 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         audio, sr = librosa.load(file_path)
 
     try:
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-        model_name = "openai/whisper-large-v2"
-        processor = WhisperProcessor.from_pretrained(model_name)
-
-        message = await update.message.reply_text("Loading model...")
-        model = WhisperForConditionalGeneration.from_pretrained(model_name).to(device)
-
-        model.config.forced_decoder_ids = processor.get_decoder_prompt_ids(
-            language="it",
-            task="transcribe",
-        )
-
-        # Define the new sample rate.
-        new_sr = 16000
-
-        # Calculate the number of samples in the resampled signal.
-        num_samples = int(len(audio) * new_sr / sr)
-
-        # Resample the audio signal.
-        resampled_audio = resample(audio, num_samples)
-        # Calculate the number of samples per chunk.
-        samples_per_chunk = 20 * new_sr
-
-        # Calculate the number of chunks.
-        num_chunks = int(np.ceil(len(resampled_audio) / samples_per_chunk))
-
-        # Split the resampled audio into chunks.
-        chunks = np.array_split(resampled_audio, num_chunks)
+        chunks, num_chunks = whisper.get_chunks(audio, sr)
 
         decoded_message: str = ""
+
         # Create a progress bar
         current_percentage = 0
-        await context.bot.edit_message_text(
-            text=f"Processing data: {current_percentage}%",
-            chat_id=message.chat_id,
-            message_id=message.message_id,
+        message = await update.message.reply_text(
+            text=f"Processing data: {current_percentage}%"
         )
-
         for i, chunk in enumerate(track(chunks, description="[green]Processing data")):
-            input_features = processor(
-                chunk, return_tensors="pt", sampling_rate=new_sr
+            # Transcribe the chunk
+            input_features = whisper.processor(
+                chunk, return_tensors="pt", sampling_rate=whisper.new_sr
             ).input_features
-            predicted_ids = model.generate(
-                input_features.to(device),
+
+            # Generate the transcription
+            predicted_ids = whisper.model.generate(
+                input_features.to(whisper.device),
                 is_multilingual=True,
                 max_length=10000,
             )
-            transcription = processor.batch_decode(
+
+            # Decode the transcription
+            transcription = whisper.processor.batch_decode(
                 predicted_ids, skip_special_tokens=True
             )
 
@@ -184,9 +151,6 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         logger.error(e)
         await update.message.reply_text(str(e))
-
-    del model
-    torch.cuda.empty_cache()
 
 
 def main() -> None:
