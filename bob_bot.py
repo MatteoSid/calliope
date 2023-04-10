@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import List
 
 import librosa
+from moviepy.editor import *
 from rich.progress import track
 from telegram import Update
 from telegram.ext import (
@@ -87,16 +88,35 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
+def extract_audio_from_video(video_path):
+    video = VideoFileClip(video_path)
+    audio = video.audio
+    new_audio_path = video_path.replace("temp_video", "temp_audio.ogg")
+    audio.write_audiofile(video_path.replace("temp_video", "temp_audio.ogg"))
+    return new_audio_path
+
+
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"stt called from {update.message.chat.username}")
 
-    file_id = update.message.voice.file_id
-    new_file = await context.bot.get_file(file_id)
+    try:
+        file_id = update.message.video_note.file_id
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        file_path = os.path.join(temp_dir, "temp_file")
-        await new_file.download_to_drive(file_path)
-        audio, sr = librosa.load(file_path)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            new_file = await context.bot.get_file(file_id)
+            file_path = os.path.join(temp_dir, "temp_video")
+            await new_file.download_to_drive(file_path)
+            file_path = extract_audio_from_video(video_path=file_path)
+            audio, sr = librosa.load(file_path)
+    except:
+        file_id = update.message.voice.file_id
+
+        new_file = await context.bot.get_file(file_id)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_path = os.path.join(temp_dir, "temp_audio")
+            await new_file.download_to_drive(file_path)
+            audio, sr = librosa.load(file_path)
 
     try:
         chunks, num_chunks = whisper.get_chunks(audio, sr)
@@ -163,6 +183,7 @@ def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
 
     application.add_handler(MessageHandler(filters.VOICE & ~filters.COMMAND, stt))
+    application.add_handler(MessageHandler(filters.VIDEO_NOTE & ~filters.COMMAND, stt))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()
