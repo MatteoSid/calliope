@@ -15,7 +15,7 @@ def add_user(first_name: str, language_code: str, duration: int) -> dict:
 
 def update_user(old_data: dict, duration: int) -> dict:
     old_data["times_used"] += 1
-    old_data["last_use"] = str(datetime.now().date())
+    old_data["last_use"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     old_data["total_speech_time"] += duration
     return old_data
 
