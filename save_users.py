@@ -2,12 +2,29 @@ import json
 from datetime import datetime
 
 
-def save_user(update):
+def add_user(first_name: str, language_code: str, duration: int) -> dict:
+    return {
+        "first_name": first_name,
+        "first_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "times_used": 1,
+        "last_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "total_speech_time": duration,
+        "language_code": language_code,
+    }
+
+
+def update_user(old_data: dict, duration: int) -> dict:
+    old_data["times_used"] += 1
+    old_data["last_use"] = str(datetime.now().date())
+    old_data["total_speech_time"] += duration
+    return old_data
+
+
+def save_user(update) -> None:
     file_path = "users.json"
     username = update.message.from_user.username
     first_name = update.message.from_user.first_name
     language_code = update.message.from_user.language_code
-    # duration = timedelta(seconds=update.message.voice.duration)
     duration = update.message.voice.duration
 
     try:
@@ -18,22 +35,12 @@ def save_user(update):
 
     if str(update.message.chat.type) == "private":
         if username not in data["single_users"]:
-            data["single_users"][username] = {
-                "first_name": first_name,
-                "first_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "times_used": 1,
-                "last_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "mean_audio_length": duration,
-                "total_speech_time": duration,
-                "language_code": language_code,
-            }
+            data["single_users"][username] = add_user(
+                first_name, language_code, duration
+            )
         else:
-            data["single_users"][username]["times_used"] += 1
-            data["single_users"][username]["last_use"] = str(datetime.now().date())
-            data["single_users"][username]["total_speech_time"] += duration
-            data["single_users"][username]["mean_audio_length"] = (
-                data["single_users"][username]["total_speech_time"]
-                / data["single_users"][username]["times_used"]
+            data["single_users"][username] = update_user(
+                data["single_users"][username], duration
             )
 
     elif str(update.message.chat.type) == "group":
@@ -44,18 +51,21 @@ def save_user(update):
                 "first_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "times_used": 1,
                 "last_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "mean_audio_length": duration,
-                "total_speech_time": duration,
-                "language_code": language_code,
+                "members_stats": {username: add_user(first_name, language_code)},
             }
         else:
             data["groups"][group_name]["times_used"] += 1
-            data["groups"][group_name]["last_use"] = str(datetime.now().date())
-            data["groups"][group_name]["total_speech_time"] += duration
-            data["groups"][group_name]["mean_audio_length"] = (
-                data["groups"][group_name]["total_speech_time"]
-                / data["groups"][group_name]["times_used"]
+            data["groups"][group_name]["last_use"] = datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S"
             )
+            if username not in data["groups"][group_name]["members_stats"]:
+                data["groups"][group_name]["members_stats"][username] = add_user(
+                    first_name, language_code
+                )
+            else:
+                data["groups"][group_name]["members_stats"][username] = update_user(
+                    data["groups"][group_name]["members_stats"][username], duration
+                )
 
     with open(file_path, "w") as f:
         json.dump(data, f, indent=4)
