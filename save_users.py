@@ -51,7 +51,9 @@ def save_user(update) -> None:
                 "first_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "times_used": 1,
                 "last_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "members_stats": {username: add_user(first_name, language_code)},
+                "members_stats": {
+                    username: add_user(first_name, language_code, duration)
+                },
             }
         else:
             data["groups"][group_name]["times_used"] += 1
@@ -60,7 +62,7 @@ def save_user(update) -> None:
             )
             if username not in data["groups"][group_name]["members_stats"]:
                 data["groups"][group_name]["members_stats"][username] = add_user(
-                    first_name, language_code
+                    first_name, language_code, duration
                 )
             else:
                 data["groups"][group_name]["members_stats"][username] = update_user(
