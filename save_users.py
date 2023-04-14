@@ -21,7 +21,7 @@ def update_user(old_data: dict, duration: int) -> dict:
 
 
 def save_user(update) -> None:
-    file_path = "users.json"
+    file_path = "stast.json"
     username = update.message.from_user.username
     first_name = update.message.from_user.first_name
     language_code = update.message.from_user.language_code
