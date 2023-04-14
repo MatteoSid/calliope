@@ -40,6 +40,7 @@ from inference_model import whisper_inference_model
 logging.basicConfig(
     format="%(asctime)s-%(name)s-%(levelname)s-%(message)s", level=logging.INFO
 )
+from save_users import save_user
 
 TOKEN = Path("TOKEN.txt").read_text()
 logger = logging.getLogger(__name__)
@@ -97,7 +98,8 @@ def extract_audio_from_video(video_path):
 
 
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.info(f"stt called from {update.message.chat.username}")
+    # Save the user
+    save_user(update)
 
     try:
         file_id = update.message.video_note.file_id
@@ -105,10 +107,12 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             new_file = await context.bot.get_file(file_id)
             file_path = os.path.join(temp_dir, "temp_video")
+
             await new_file.download_to_drive(file_path)
             file_path = extract_audio_from_video(video_path=file_path)
             audio, sr = librosa.load(file_path)
-    except:
+
+    except AttributeError as e:
         file_id = update.message.voice.file_id
 
         new_file = await context.bot.get_file(file_id)
@@ -117,6 +121,9 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             file_path = os.path.join(temp_dir, "temp_audio")
             await new_file.download_to_drive(file_path)
             audio, sr = librosa.load(file_path)
+
+    except Exception as e:
+        logger.error(e)
 
     try:
         chunks, num_chunks = whisper.get_chunks(audio, sr)
