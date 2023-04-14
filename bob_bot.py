@@ -18,12 +18,13 @@ bot.
 
 import logging
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from typing import List
 
 import librosa
-from moviepy.editor import *
+from moviepy.editor import VideoFileClip
 from rich.progress import track
 from telegram import Update
 from telegram.ext import (
@@ -90,6 +91,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 def extract_audio_from_video(video_path):
+    """Extract the audio from a video file and save it as a .ogg file."""
     video = VideoFileClip(video_path)
     audio = video.audio
     new_audio_path = video_path.replace("temp_video", "temp_audio.ogg")
@@ -99,18 +101,41 @@ def extract_audio_from_video(video_path):
 
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Save the user
-    save_user(update)
+    try:
+        save_user(update)
+    except:
+        # TODO: handle this exception
+        # With video noter it gives an error.
+        logger.error("⚠️ TODO: stats doesent't increment with video messages ⚠️")
+        pass
 
     try:
         file_id = update.message.video_note.file_id
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            new_file = await context.bot.get_file(file_id)
-            file_path = os.path.join(temp_dir, "temp_video")
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                logger.info(temp_dir)
 
-            await new_file.download_to_drive(file_path)
-            file_path = extract_audio_from_video(video_path=file_path)
-            audio, sr = librosa.load(file_path)
+                new_file = await context.bot.get_file(file_id)
+                file_video_path = os.path.join(temp_dir, "temp_video")
+                await new_file.download_to_drive(file_video_path)
+                video = VideoFileClip(file_video_path)
+        except Exception as e:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+            # TODO: handle this exception.
+            # The code work even there is this error.
+            logger.warning(
+                "⚠️ TODO: handle this exception: error with temporary directory ⚠️"
+            )
+
+        audio = video.audio
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
+            audio.write_audiofile(file_audio_path)
+
+            audio, sr = librosa.load(file_audio_path)
 
     except AttributeError as e:
         file_id = update.message.voice.file_id
