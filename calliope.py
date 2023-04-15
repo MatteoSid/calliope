@@ -16,13 +16,16 @@ bot.
 """
 
 
-import logging
+import json
 import os
+import sys
 import tempfile
+from datetime import timedelta
 from pathlib import Path
 from typing import List
 
 import librosa
+from loguru import logger
 from moviepy.editor import VideoFileClip
 from rich.progress import track
 from telegram import Update
@@ -36,10 +39,23 @@ from telegram.ext import (
 
 from inference_model import whisper_inference_model
 
-# Enable logging
-logging.basicConfig(
-    format="%(asctime)s-%(name)s-%(levelname)s-%(message)s", level=logging.INFO
+logger.configure(
+    handlers=[
+        {
+            "sink": sys.stdout,
+            "format": "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> |"
+            " <level>{level: <8}</level> |"
+            " <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> -"
+            " <level>{message}</level>",
+            "colorize": True,
+            # "filter": log_utils.level_filter,
+            # "diagnose": environ != "produzione",
+        },
+    ]
 )
+
+logger.info("Starting Calliope")
+
 from save_users import save_user
 
 token_path = Path("TOKEN.txt")
@@ -49,8 +65,6 @@ else:
     with open(token_path, "w") as f:
         TOKEN = input("Insert your bot token: ")
         f.write(TOKEN)
-
-logger = logging.getLogger(__name__)
 
 whisper = whisper_inference_model(new_sample_rate=16000, seconds_per_chunk=20)
 
@@ -148,7 +162,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             audio, sr = librosa.load(file_path)
 
     except Exception as e:
-        logger.error(e)
+        logger.error(f"Problema con il caricamento del file:\n{e}")
 
     try:
         chunks, num_chunks = whisper.get_chunks(audio, sr)
@@ -198,7 +212,10 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         msgs_list = split_string(decoded_message)
         for msg in msgs_list:
             logger.info(f"Transcription: {msg}")
-            if msg != "Sottotitoli e revisione a cura di QTSS":
+            if msg.strip() not in [
+                "Sottotitoli e revisione a cura di QTSS",
+                "Sottotitoli creati dalla comunità Amara.org",
+            ]:
                 await update.message.reply_text(msg)
             else:
                 await update.message.reply_text("...")
