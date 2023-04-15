@@ -1,4 +1,6 @@
 # Calliope
+[![](https://img.shields.io/badge/license-MIT-brightgreen.svg)](https://github.com/ptkdev/chrome-extension-aspectratio219/blob/nightly/LICENSE.md)
+
 Calliope is a Telegram Bot that transcribe any audio or video mesage using Whisper from OpenAi.
 
 ### Why should you use Calliope to transcribe messages? 
