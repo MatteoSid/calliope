@@ -43,7 +43,14 @@ logging.basicConfig(
 )
 from save_users import save_user
 
-TOKEN = Path("TOKEN.txt").read_text()
+token_path = Path("TOKEN.txt")
+if os.path.exists(token_path):
+    TOKEN = Path(token_path).read_text()
+else:
+    with open(token_path, "w") as f:
+        TOKEN = input("Insert your bot token: ")
+        f.write(TOKEN)
+
 logger = logging.getLogger(__name__)
 
 whisper = whisper_inference_model(new_sample_rate=16000, seconds_per_chunk=20)
