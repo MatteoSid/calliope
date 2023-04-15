@@ -2,6 +2,7 @@ python-telegram-bot
 transformers
 librosa
 rich
+moviepy
 
 torch @ https://download.pytorch.org/whl/cu117/torch-2.0.0%2Bcu117-cp310-cp310-win_amd64.whl
 torchaudio @ https://download.pytorch.org/whl/cu117/torchaudio-2.0.1%2Bcu117-cp310-cp310-win_amd64.whl
