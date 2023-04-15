@@ -192,7 +192,10 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         msgs_list = split_string(decoded_message)
         for msg in msgs_list:
             logger.info(f"Transcription: {msg}")
-            await update.message.reply_text(msg)
+            if msg != "Sottotitoli e revisione a cura di QTSS":
+                await update.message.reply_text(msg)
+            else:
+                await update.message.reply_text("...")
 
     except Exception as e:
         logger.error(e)
