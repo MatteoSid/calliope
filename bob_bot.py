@@ -101,13 +101,7 @@ def extract_audio_from_video(video_path):
 
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Save the user
-    try:
-        save_user(update)
-    except:
-        # TODO: handle this exception
-        # With video noter it gives an error.
-        logger.error("⚠️ TODO: stats doesent't increment with video messages ⚠️")
-        pass
+    save_user(update)
 
     try:
         file_id = update.message.video_note.file_id
@@ -121,8 +115,8 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await new_file.download_to_drive(file_video_path)
                 video = VideoFileClip(file_video_path)
         except Exception as e:
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir)
+            # if os.path.exists(temp_dir):
+            #     shutil.rmtree(temp_dir)
             # TODO: handle this exception.
             # The code work even there is this error.
             logger.warning(

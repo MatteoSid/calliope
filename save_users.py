@@ -25,7 +25,10 @@ def save_user(update) -> None:
     username = update.message.from_user.username
     first_name = update.message.from_user.first_name
     language_code = update.message.from_user.language_code
-    duration = update.message.voice.duration
+    try:
+        duration = update.message.voice.duration
+    except AttributeError:
+        duration = update.message.video_note.duration
 
     try:
         with open(file_path, "r") as f:
