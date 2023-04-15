@@ -23,7 +23,9 @@ cffi==1.15.1
 charset-normalizer==3.1.0
     # via requests
 colorama==0.4.6
-    # via tqdm
+    # via
+    #   loguru
+    #   tqdm
 decorator==4.4.2
     # via
     #   librosa
@@ -62,6 +64,8 @@ librosa==0.10.0.post2
     # via -r .\requirements.in
 llvmlite==0.39.1
     # via numba
+loguru==0.7.0
+    # via -r .\requirements.in
 markdown-it-py==2.2.0
     # via rich
 markupsafe==2.1.2
@@ -170,6 +174,8 @@ typing-extensions==4.5.0
     #   torch
 urllib3==1.26.15
     # via requests
+win32-setctime==1.1.0
+    # via loguru
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
