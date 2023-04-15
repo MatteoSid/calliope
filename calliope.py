@@ -230,7 +230,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "Sottotitoli creati dalla comunità Amara.org",
             ]:
                 await update.message.reply_text(
-                    f"{update.message.from_user.username}: msg"
+                    f"{update.message.from_user.username}: {msg}"
                 )
             else:
                 await update.message.reply_text("...")
