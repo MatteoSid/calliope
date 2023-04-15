@@ -22,9 +22,9 @@ import sys
 import tempfile
 from datetime import timedelta
 from pathlib import Path
-from typing import List
 
 import librosa
+import pandas as pd
 from loguru import logger
 from moviepy.editor import VideoFileClip
 from rich.progress import track
@@ -38,6 +38,8 @@ from telegram.ext import (
 )
 
 from inference_model import whisper_inference_model
+from utils.save_users import save_user
+from utils.utils import format_timedelta, split_string
 
 logger.configure(
     handlers=[
@@ -48,15 +50,11 @@ logger.configure(
             " <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> -"
             " <level>{message}</level>",
             "colorize": True,
-            # "filter": log_utils.level_filter,
-            # "diagnose": environ != "produzione",
         },
     ]
 )
 
 logger.info("Starting Calliope")
-
-from save_users import save_user
 
 token_path = Path("TOKEN.txt")
 if os.path.exists(token_path):
@@ -69,32 +67,10 @@ else:
 whisper = whisper_inference_model(new_sample_rate=16000, seconds_per_chunk=20)
 
 
-def split_string(string: str) -> List[str]:
-    """
-    Split a string into a list of strings of length < 4096.
-    :param string: the string to split
-    :return: a list of strings
-    """
-    if len(string) < 4096:
-        return [string]
-    else:
-        words = string.split()
-        result = []
-        current_string = ""
-        for word in words:
-            if len(current_string) + len(word) + 1 > 4096:
-                result.append(current_string)
-                current_string = word
-            else:
-                current_string += " " + word
-        result.append(current_string)
-        return result
-
-
-# Define a few command handlers. These usually take the two arguments update and
-# context.
+# Define a few command handlers. These usually take the two arguments update and context.
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
+    logger.info(f"{update.message.from_user.username}: Start command")
     user = update.effective_user
     await update.message.reply_html(
         f"Hi {user.mention_html()}, this bot converts any voice message into text.\n\nSend or forward any voice message here and you will immediately receive the transcription.\n\nYou can also add the bot to a group and by setting it as an administrator it will convert all the audio sent in the group.\n\nHave fun!!",
@@ -110,13 +86,50 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
-def extract_audio_from_video(video_path):
-    """Extract the audio from a video file and save it as a .ogg file."""
-    video = VideoFileClip(video_path)
-    audio = video.audio
-    new_audio_path = video_path.replace("temp_video", "temp_audio.ogg")
-    audio.write_audiofile(video_path.replace("temp_video", "temp_audio.ogg"))
-    return new_audio_path
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send a message when the command /stats is issued."""
+    logger.info(f"{update.message.from_user.username}: Stats command")
+    file_path = "stast.json"
+
+    try:
+        with open(file_path, "r") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        await update.message.reply_text("Stats not found")
+
+    # check if is a single user or a group
+    if str(update.message.chat.type) == "private":
+        # check if there is stats for the user
+        if update.message.chat.username in data["single_users"]:
+            total_speech_time = timedelta(
+                seconds=data["single_users"][update.message.chat.username][
+                    "total_speech_time"
+                ]
+            )
+            await update.message.reply_text(
+                f"Time speech converted:\n{format_timedelta(total_speech_time)}"
+            )
+        else:
+            await update.message.reply_text("Stats not found")
+
+    elif str(update.message.chat.type) == "group":
+        # check if there is stats for the group
+        if str(update.message.chat.id) in data["groups"]:
+            # load user stats in a dataframe
+            members_stats = data["groups"][str(update.message.chat.id)]["members_stats"]
+            data_tmp = pd.DataFrame.from_dict(
+                members_stats, orient="index", columns=["total_speech_time"]
+            )
+            data_tmp.sort_values(by="total_speech_time", ascending=False, inplace=True)
+
+            result = ""
+            for index, row in data_tmp.iterrows():
+                total_speech_time = timedelta(seconds=int(row["total_speech_time"]))
+                result += f"@{index}: {format_timedelta(total_speech_time)}\n"
+
+            await update.message.reply_text(result)
+        else:
+            await update.message.reply_text("Stats not found")
 
 
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -216,7 +229,9 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "Sottotitoli e revisione a cura di QTSS",
                 "Sottotitoli creati dalla comunità Amara.org",
             ]:
-                await update.message.reply_text(msg)
+                await update.message.reply_text(
+                    f"{update.message.from_user.username}: msg"
+                )
             else:
                 await update.message.reply_text("...")
 
@@ -233,6 +248,7 @@ def main() -> None:
     # on different commands - answer in Telegram
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("stats", stats))
 
     application.add_handler(MessageHandler(filters.VOICE & ~filters.COMMAND, stt))
     application.add_handler(MessageHandler(filters.VIDEO_NOTE & ~filters.COMMAND, stt))

@@ -158,3 +158,4 @@ cython_debug/
 .vscode/settings.json
 TOKEN.txt
 stast.json
+*ipynb
