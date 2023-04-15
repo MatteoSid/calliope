@@ -6,7 +6,9 @@ There are many bots that can do this, but this means that you have to forward yo
 
 ## Screenshots
 
-![](https://github.com/MatteoSid/calliope/blob/main/screenshots/screenshot.jpg)
+<p align="center">
+  <img src="screenshots\screenshot.jpg" alt="image" width="300">
+</p>
 
 ## Setup
 Whisper used Python 3.9.9 and [PyTorch](https://pytorch.org/) 1.10.1 to train and test the models, but the codebase is expected to be compatible with Python 3.8-3.10 and recent PyTorch versions. The codebase also depends on a few Python packages, most notably [OpenAI's tiktoken](https://github.com/openai/tiktoken) for their fast tokenizer implementation and [ffmpeg-python](https://github.com/kkroening/ffmpeg-python) for reading audio files.
