@@ -18,11 +18,13 @@ bot.
 
 import logging
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from typing import List
 
 import librosa
+from moviepy.editor import VideoFileClip
 from rich.progress import track
 from telegram import Update
 from telegram.ext import (
@@ -39,6 +41,7 @@ from inference_model import whisper_inference_model
 logging.basicConfig(
     format="%(asctime)s-%(name)s-%(levelname)s-%(message)s", level=logging.INFO
 )
+from save_users import save_user
 
 TOKEN = Path("TOKEN.txt").read_text()
 logger = logging.getLogger(__name__)
@@ -87,16 +90,59 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
+def extract_audio_from_video(video_path):
+    """Extract the audio from a video file and save it as a .ogg file."""
+    video = VideoFileClip(video_path)
+    audio = video.audio
+    new_audio_path = video_path.replace("temp_video", "temp_audio.ogg")
+    audio.write_audiofile(video_path.replace("temp_video", "temp_audio.ogg"))
+    return new_audio_path
+
+
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.info(f"stt called from {update.message.chat.username}")
+    # Save the user
+    save_user(update)
 
-    file_id = update.message.voice.file_id
-    new_file = await context.bot.get_file(file_id)
+    try:
+        file_id = update.message.video_note.file_id
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        file_path = os.path.join(temp_dir, "temp_file")
-        await new_file.download_to_drive(file_path)
-        audio, sr = librosa.load(file_path)
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                logger.info(temp_dir)
+
+                new_file = await context.bot.get_file(file_id)
+                file_video_path = os.path.join(temp_dir, "temp_video")
+                await new_file.download_to_drive(file_video_path)
+                video = VideoFileClip(file_video_path)
+        except Exception as e:
+            # if os.path.exists(temp_dir):
+            #     shutil.rmtree(temp_dir)
+            # TODO: handle this exception.
+            # The code work even there is this error.
+            logger.warning(
+                "⚠️ TODO: handle this exception: error with temporary directory ⚠️"
+            )
+
+        audio = video.audio
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
+            audio.write_audiofile(file_audio_path)
+
+            audio, sr = librosa.load(file_audio_path)
+
+    except AttributeError as e:
+        file_id = update.message.voice.file_id
+
+        new_file = await context.bot.get_file(file_id)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_path = os.path.join(temp_dir, "temp_audio")
+            await new_file.download_to_drive(file_path)
+            audio, sr = librosa.load(file_path)
+
+    except Exception as e:
+        logger.error(e)
 
     try:
         chunks, num_chunks = whisper.get_chunks(audio, sr)
@@ -146,7 +192,10 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         msgs_list = split_string(decoded_message)
         for msg in msgs_list:
             logger.info(f"Transcription: {msg}")
-            await update.message.reply_text(msg)
+            if msg != "Sottotitoli e revisione a cura di QTSS":
+                await update.message.reply_text(msg)
+            else:
+                await update.message.reply_text("...")
 
     except Exception as e:
         logger.error(e)
@@ -163,6 +212,7 @@ def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
 
     application.add_handler(MessageHandler(filters.VOICE & ~filters.COMMAND, stt))
+    application.add_handler(MessageHandler(filters.VIDEO_NOTE & ~filters.COMMAND, stt))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()
