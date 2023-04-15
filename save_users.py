@@ -47,10 +47,11 @@ def save_user(update) -> None:
             )
 
     elif str(update.message.chat.type) == "group":
-        group_name = update.message.chat.title
+        group_id = str(update.message.chat.id)
 
-        if group_name not in data["groups"]:
-            data["groups"][group_name] = {
+        if group_id not in data["groups"]:
+            data["groups"][group_id] = {
+                "group_name": update.message.chat.title,
                 "first_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "times_used": 1,
                 "last_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -59,17 +60,18 @@ def save_user(update) -> None:
                 },
             }
         else:
-            data["groups"][group_name]["times_used"] += 1
-            data["groups"][group_name]["last_use"] = datetime.now().strftime(
+            data["groups"][group_id]["group_name"] = update.message.chat.title
+            data["groups"][group_id]["times_used"] += 1
+            data["groups"][group_id]["last_use"] = datetime.now().strftime(
                 "%Y-%m-%d %H:%M:%S"
             )
-            if username not in data["groups"][group_name]["members_stats"]:
-                data["groups"][group_name]["members_stats"][username] = add_user(
+            if username not in data["groups"][group_id]["members_stats"]:
+                data["groups"][group_id]["members_stats"][username] = add_user(
                     first_name, language_code, duration
                 )
             else:
-                data["groups"][group_name]["members_stats"][username] = update_user(
-                    data["groups"][group_name]["members_stats"][username], duration
+                data["groups"][group_id]["members_stats"][username] = update_user(
+                    data["groups"][group_id]["members_stats"][username], duration
                 )
 
     with open(file_path, "w") as f:
