@@ -63,8 +63,9 @@ else:
     with open(token_path, "w") as f:
         TOKEN = input("Insert your bot token: ")
         f.write(TOKEN)
-
+logger.info("Loading model...")
 whisper = whisper_inference_model(new_sample_rate=16000, seconds_per_chunk=20)
+logger.info("Model loaded")
 
 
 # Define a few command handlers. These usually take the two arguments update and context.
@@ -112,7 +113,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         else:
             await update.message.reply_text("Stats not found")
 
-    elif str(update.message.chat.type) == "group":
+    elif str(update.message.chat.type) in ["group", "supergroup"]:
         # check if there is stats for the group
         if str(update.message.chat.id) in data["groups"]:
             # load user stats in a dataframe
@@ -153,14 +154,14 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             # TODO: handle this exception.
             # The code work even there is this error.
             logger.warning(
-                "⚠️ TODO: handle this exception: error with temporary directory ⚠️"
+                "⚠️  TODO: handle this exception: error with temporary directory ⚠️"
             )
 
         audio = video.audio
 
         with tempfile.TemporaryDirectory() as temp_dir:
             file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
-            audio.write_audiofile(file_audio_path)
+            audio.write_audiofile(file_audio_path, verbose=False, logger=None)
 
             audio, sr = librosa.load(file_audio_path)
 
@@ -185,7 +186,8 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Create a progress bar
         current_percentage = 0
         message = await update.message.reply_text(
-            text=f"Processing data: {current_percentage}%"
+            text=f"Processing data: {current_percentage}%",
+            disable_notification=True,
         )
         for i, chunk in enumerate(track(chunks, description="[green]Processing data")):
             # Transcribe the chunk
@@ -224,16 +226,20 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         msgs_list = split_string(decoded_message)
         for msg in msgs_list:
-            logger.info(f"Transcription: {msg}")
+            logger.info(f"{update.message.from_user.username}: {msg}")
             if msg.strip() not in [
                 "Sottotitoli e revisione a cura di QTSS",
                 "Sottotitoli creati dalla comunità Amara.org",
             ]:
                 await update.message.reply_text(
-                    f"{update.message.from_user.username}: {msg}"
+                    msg,
+                    disable_notification=True,
                 )
             else:
-                await update.message.reply_text("...")
+                await update.message.reply_text(
+                    "...",
+                    disable_notification=True,
+                )
 
     except Exception as e:
         logger.error(e)
@@ -244,6 +250,7 @@ def main() -> None:
     """Start the bot."""
     # Create the Application and pass it your bot's token.
     application = Application.builder().token(TOKEN).build()
+    logger.info("Application is running")
 
     # on different commands - answer in Telegram
     application.add_handler(CommandHandler("start", start))

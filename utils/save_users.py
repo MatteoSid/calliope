@@ -46,7 +46,7 @@ def save_user(update) -> None:
                 data["single_users"][username], duration
             )
 
-    elif str(update.message.chat.type) == "group":
+    elif str(update.message.chat.type) in ["group", "supergroup"]:
         group_id = str(update.message.chat.id)
 
         if group_id not in data["groups"]:
