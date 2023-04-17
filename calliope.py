@@ -71,7 +71,6 @@ else:
         "out.log",
         format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
     )
-    logger.add("out.log")
 
 logger.info("Starting Calliope")
 
@@ -158,6 +157,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.info(f"Request from: {update.message.from_user.username}")
     # Save the user
     save_user(update)
 
