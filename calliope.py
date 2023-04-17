@@ -16,6 +16,7 @@ bot.
 """
 
 
+import argparse
 import json
 import os
 import sys
@@ -41,21 +42,40 @@ from inference_model import whisper_inference_model
 from utils.save_users import save_user
 from utils.utils import format_timedelta, split_string
 
-logger.configure(
-    handlers=[
-        {
-            "sink": sys.stdout,
-            "format": "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> |"
-            " <level>{level: <8}</level> |"
-            " <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> -"
-            " <level>{message}</level>",
-            "colorize": True,
-        },
-    ]
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "-v",
+    "--verbose",
+    type=bool,
+    default=False,
+    help="Set it to True to enable verbose mode",
 )
+args = parser.parse_args()
+
+if args.verbose:
+    logger.configure(
+        handlers=[
+            {
+                "sink": sys.stdout,
+                "format": "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> |"
+                " <level>{level: <8}</level> |"
+                " <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> -"
+                " <level>{message}</level>",
+                "colorize": True,
+            },
+        ]
+    )
+else:
+    logger.remove(0)
+    logger.add(
+        "out.log",
+        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+    )
+    logger.add("out.log")
 
 logger.info("Starting Calliope")
 
+# Get the TOKEN for logging in the bot
 token_path = Path("TOKEN.txt")
 if os.path.exists(token_path):
     TOKEN = Path(token_path).read_text()
@@ -63,6 +83,7 @@ else:
     with open(token_path, "w") as f:
         TOKEN = input("Insert your bot token: ")
         f.write(TOKEN)
+
 logger.info("Loading model...")
 whisper = whisper_inference_model(new_sample_rate=16000, seconds_per_chunk=20)
 logger.info("Model loaded")
@@ -97,6 +118,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             data = json.load(f)
     except FileNotFoundError:
         await update.message.reply_text("Stats not found")
+        logger.error("Stats not found")
 
     # check if is a single user or a group
     if str(update.message.chat.type) == "private":
@@ -110,8 +132,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_text(
                 f"Time speech converted:\n{format_timedelta(total_speech_time)}"
             )
+            logger.success("Stats sent")
         else:
             await update.message.reply_text("Stats not found")
+            logger.error("Stats not found")
 
     elif str(update.message.chat.type) in ["group", "supergroup"]:
         # check if there is stats for the group
@@ -145,7 +169,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 logger.info(temp_dir)
 
                 new_file = await context.bot.get_file(file_id)
-                file_video_path = os.path.join(temp_dir, "temp_video")
+                file_video_path = os.path.join(temp_dir, "temp_video.mp4")
                 await new_file.download_to_drive(file_video_path)
                 video = VideoFileClip(file_video_path)
         except Exception as e:
@@ -154,7 +178,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             # TODO: handle this exception.
             # The code work even there is this error.
             logger.warning(
-                "⚠️  TODO: handle this exception: error with temporary directory ⚠️"
+                "⚠️ TODO: handle this exception: error with temporary directory ⚠️"
             )
 
         audio = video.audio
@@ -231,15 +255,24 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "Sottotitoli e revisione a cura di QTSS",
                 "Sottotitoli creati dalla comunità Amara.org",
             ]:
-                await update.message.reply_text(
-                    msg,
-                    disable_notification=True,
-                )
+                try:
+                    await update.message.reply_text(
+                        msg,
+                        disable_notification=True,
+                    )
+                    logger.success("Message sent")
+                except Exception as e:
+                    logger.error(e)
+                    await update.message.reply_text(
+                        "error",
+                        disable_notification=True,
+                    )
             else:
                 await update.message.reply_text(
                     "...",
                     disable_notification=True,
                 )
+                logger.success(f"{update.message.from_user.username}: sent '...'")
 
     except Exception as e:
         logger.error(e)
