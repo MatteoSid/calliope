@@ -41,6 +41,7 @@ from telegram.ext import (
 from inference_model import whisper_inference_model
 from utils.save_users import save_user
 from utils.utils import format_timedelta, split_string
+from youtube import youtube_link_handler
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -172,7 +173,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 file_video_path = os.path.join(temp_dir, "temp_video.mp4")
                 await new_file.download_to_drive(file_video_path)
                 video = VideoFileClip(file_video_path)
-        except Exception as e:
+        except Exception:
             # if os.path.exists(temp_dir):
             #     shutil.rmtree(temp_dir)
             # TODO: handle this exception.
@@ -189,7 +190,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
             audio, sr = librosa.load(file_audio_path)
 
-    except AttributeError as e:
+    except AttributeError:
         file_id = update.message.voice.file_id
 
         new_file = await context.bot.get_file(file_id)
@@ -292,6 +293,10 @@ def main() -> None:
 
     application.add_handler(MessageHandler(filters.VOICE & ~filters.COMMAND, stt))
     application.add_handler(MessageHandler(filters.VIDEO_NOTE & ~filters.COMMAND, stt))
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, youtube_link_handler)
+    )
+    # write an handler that parses text containing the youtube link
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()
