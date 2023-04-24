@@ -2,18 +2,6 @@
 # pylint: disable=unused-argument, wrong-import-position
 # This program is dedicated to the public domain under the CC0 license.
 
-"""
-Simple Bot to reply to Telegram messages.
-
-First, a few handler functions are defined. Then, those functions are passed to
-the Application and registered at their respective places.
-Then, the bot is started and runs until we press Ctrl-C on the command line.
-
-Usage:
-Basic Echobot example, repeats messages.
-Press Ctrl-C on the command line or send a signal to the process to stop the
-bot.
-"""
 
 
 import argparse
@@ -102,8 +90,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /help is issued."""
     await update.message.reply_text(
-        "This bot converts any voice message into a text message. All you have to do is forward any voice message to the bot and you will immediately receive the corresponding text message."
-        + "The processing time is proportional to the duration of the voice message.\n\nYou can also add the bot to a group and by setting it as an administrator it will convert all the audio sent in the group."
+        "This bot converts any voice/video message into a text message. All you have to do is forward any voice/video message to the bot and you will immediately receive the corresponding text message."
+        + "The processing time is proportional to the duration of the voice message.\n\nTo use the bot in a group, it is sufficient to add Calliope to the group as an administrator and all audio/video messages will be "
+        + "immediately converted."
+        + "\nYou can also have the stats of your use with the /stats command. It works both in the private chat and in the groups"
     )
 
 
@@ -118,6 +108,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except FileNotFoundError:
         await update.message.reply_text("Stats not found")
         logger.error("Stats not found")
+        return
 
     # check if is a single user or a group
     if str(update.message.chat.type) == "private":
