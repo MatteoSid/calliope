@@ -11,6 +11,7 @@ import sys
 import tempfile
 from datetime import timedelta
 from pathlib import Path
+import time
 
 import librosa
 import pandas as pd
@@ -149,6 +150,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"Request from: {update.message.from_user.username}")
+
+    start_time = time.time()
     # Save the user
     save_user(update)
 
@@ -250,6 +253,9 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     await update.message.reply_text(
                         msg,
                         disable_notification=True,
+                    )
+                    logger.success(
+                        f"Inference done in {round(time.time() - start_time, 2)} seconds"
                     )
                     logger.success("Message sent")
                 except Exception as e:
