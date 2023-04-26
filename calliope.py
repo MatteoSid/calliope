@@ -3,7 +3,6 @@
 # This program is dedicated to the public domain under the CC0 license.
 
 
-
 import argparse
 import json
 import os
@@ -29,7 +28,8 @@ from telegram.ext import (
 
 from inference_model import whisper_inference_model
 from utils.save_users import save_user
-from utils.utils import format_timedelta, split_string
+from utils.utils import format_timedelta, split_string, detect_silence
+from math import ceil
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -192,6 +192,13 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             file_path = os.path.join(temp_dir, "temp_audio")
             await new_file.download_to_drive(file_path)
             audio, sr = librosa.load(file_path)
+            count, duration = detect_silence(audio, sr)
+
+        if count == ceil(duration):
+            logger.info("Audio is silent, inference skipped")
+            return
+        else:
+            logger.info(f"Audio duration: {round(duration, 2)} seconds")
 
     except Exception as e:
         logger.error(f"Problema con il caricamento del file:\n{e}")
