@@ -156,6 +156,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     save_user(update)
 
     try:
+        # Check if the message is a video message
         file_id = update.message.video_note.file_id
 
         try:
@@ -180,9 +181,10 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
             audio.write_audiofile(file_audio_path, verbose=False, logger=None)
-
             audio, sr = librosa.load(file_audio_path)
+            count, duration = detect_silence(audio, sr)
 
+    # if the message is not a video message, it is a voice message
     except AttributeError as e:
         file_id = update.message.voice.file_id
 
@@ -194,16 +196,16 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             audio, sr = librosa.load(file_path)
             count, duration = detect_silence(audio, sr)
 
+    except Exception as e:
+        logger.error(f"Problema con il caricamento del file:\n{e}")
+
+    try:
         if count == ceil(duration):
             logger.info("Audio is silent, inference skipped")
             return
         else:
             logger.info(f"Audio duration: {round(duration, 2)} seconds")
 
-    except Exception as e:
-        logger.error(f"Problema con il caricamento del file:\n{e}")
-
-    try:
         chunks, num_chunks = whisper.get_chunks(audio, sr)
 
         decoded_message: str = ""
