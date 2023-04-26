@@ -77,3 +77,14 @@ def detect_silence(audio: np.ndarray, sr: int, threshold: int = 70) -> int:
     except Exception as e:
         logger.exception(e)
         raise e
+
+
+def get_message_info(update):
+    try:
+        file_id = update.message.video_note.file_id
+        message_type = "video_note"
+    except AttributeError:
+        file_id = update.message.voice.file_id
+        message_type = "voice"
+
+    return file_id, message_type

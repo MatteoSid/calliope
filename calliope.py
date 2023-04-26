@@ -2,15 +2,15 @@
 # pylint: disable=unused-argument, wrong-import-position
 # This program is dedicated to the public domain under the CC0 license.
 
-
 import argparse
 import json
 import os
 import sys
 import tempfile
-from datetime import timedelta
-from pathlib import Path
 import time
+from datetime import timedelta
+from math import ceil
+from pathlib import Path
 
 import librosa
 import pandas as pd
@@ -28,8 +28,7 @@ from telegram.ext import (
 
 from inference_model import whisper_inference_model
 from utils.save_users import save_user
-from utils.utils import format_timedelta, split_string, detect_silence
-from math import ceil
+from utils.utils import detect_silence, format_timedelta, get_message_info, split_string
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -150,56 +149,45 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"Request from: {update.message.from_user.username}")
-
     start_time = time.time()
+
     # Save the user
     save_user(update)
 
+    file_id, message_type = get_message_info(update)
+
+    # extract the audio file from voice message or video message
     try:
-        # Check if the message is a video message
-        file_id = update.message.video_note.file_id
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logger.info(temp_dir)
 
-        try:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                logger.info(temp_dir)
+            new_file = await context.bot.get_file(file_id)
 
-                new_file = await context.bot.get_file(file_id)
+            if message_type == "video_note":
                 file_video_path = os.path.join(temp_dir, "temp_video.mp4")
                 await new_file.download_to_drive(file_video_path)
                 video = VideoFileClip(file_video_path)
-        except Exception as e:
-            # if os.path.exists(temp_dir):
-            #     shutil.rmtree(temp_dir)
-            # TODO: handle this exception.
-            # The code work even there is this error.
-            logger.warning(
-                "⚠️ TODO: handle this exception: error with temporary directory ⚠️"
-            )
+                audio = video.audio
+                file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
+                audio.write_audiofile(file_audio_path, verbose=False, logger=None)
 
-        audio = video.audio
+            elif message_type == "voice":
+                file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
+                await new_file.download_to_drive(file_audio_path)
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
-            audio.write_audiofile(file_audio_path, verbose=False, logger=None)
             audio, sr = librosa.load(file_audio_path)
             count, duration = detect_silence(audio, sr)
 
-    # if the message is not a video message, it is a voice message
-    except AttributeError as e:
-        file_id = update.message.voice.file_id
-
-        new_file = await context.bot.get_file(file_id)
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            file_path = os.path.join(temp_dir, "temp_audio")
-            await new_file.download_to_drive(file_path)
-            audio, sr = librosa.load(file_path)
-            count, duration = detect_silence(audio, sr)
-
     except Exception as e:
-        logger.error(f"Problema con il caricamento del file:\n{e}")
+        # TODO: handle this exception.
+        # The code work even there is this error.
+        logger.warning(
+            "⚠️ TODO: handle this exception with video messages: error with temporary directory ⚠️"
+        )
 
+    # now I can do the inference
     try:
+        #
         if count == ceil(duration):
             logger.info("Audio is silent, inference skipped")
             return
