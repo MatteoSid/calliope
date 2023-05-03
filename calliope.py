@@ -2,26 +2,14 @@
 # pylint: disable=unused-argument, wrong-import-position
 # This program is dedicated to the public domain under the CC0 license.
 
-"""
-Simple Bot to reply to Telegram messages.
-
-First, a few handler functions are defined. Then, those functions are passed to
-the Application and registered at their respective places.
-Then, the bot is started and runs until we press Ctrl-C on the command line.
-
-Usage:
-Basic Echobot example, repeats messages.
-Press Ctrl-C on the command line or send a signal to the process to stop the
-bot.
-"""
-
-
 import argparse
 import json
 import os
 import sys
 import tempfile
+import time
 from datetime import timedelta
+from math import ceil
 from pathlib import Path
 
 import librosa
@@ -40,8 +28,7 @@ from telegram.ext import (
 
 from inference_model import whisper_inference_model
 from utils.save_users import save_user
-from utils.utils import format_timedelta, split_string
-from youtube import youtube_link_handler
+from utils.utils import detect_silence, format_timedelta, get_message_info, split_string
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -103,8 +90,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /help is issued."""
     await update.message.reply_text(
-        "This bot converts any voice message into a text message. All you have to do is forward any voice message to the bot and you will immediately receive the corresponding text message."
-        + "The processing time is proportional to the duration of the voice message.\n\nYou can also add the bot to a group and by setting it as an administrator it will convert all the audio sent in the group."
+        "This bot converts any voice/video message into a text message. All you have to do is forward any voice/video message to the bot and you will immediately receive the corresponding text message."
+        + "The processing time is proportional to the duration of the voice message.\n\nTo use the bot in a group, it is sufficient to add Calliope to the group as an administrator and all audio/video messages will be "
+        + "immediately converted."
+        + "\nYou can also have the stats of your use with the /stats command. It works both in the private chat and in the groups"
     )
 
 
@@ -119,6 +108,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except FileNotFoundError:
         await update.message.reply_text("Stats not found")
         logger.error("Stats not found")
+        return
 
     # check if is a single user or a group
     if str(update.message.chat.type) == "private":
@@ -159,51 +149,51 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"Request from: {update.message.from_user.username}")
+    start_time = time.time()
+
     # Save the user
     save_user(update)
 
+    file_id, message_type = get_message_info(update)
+
+    # extract the audio file from voice message or video message
     try:
-        file_id = update.message.video_note.file_id
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logger.info(temp_dir)
 
-        try:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                logger.info(temp_dir)
+            new_file = await context.bot.get_file(file_id)
 
-                new_file = await context.bot.get_file(file_id)
+            if message_type == "video_note":
                 file_video_path = os.path.join(temp_dir, "temp_video.mp4")
                 await new_file.download_to_drive(file_video_path)
                 video = VideoFileClip(file_video_path)
-        except Exception:
-            # if os.path.exists(temp_dir):
-            #     shutil.rmtree(temp_dir)
-            # TODO: handle this exception.
-            # The code work even there is this error.
-            logger.warning(
-                "⚠️ TODO: handle this exception: error with temporary directory ⚠️"
-            )
+                audio = video.audio
+                file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
+                audio.write_audiofile(file_audio_path, verbose=False, logger=None)
 
-        audio = video.audio
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
-            audio.write_audiofile(file_audio_path, verbose=False, logger=None)
+            elif message_type == "voice":
+                file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
+                await new_file.download_to_drive(file_audio_path)
 
             audio, sr = librosa.load(file_audio_path)
-
-    except AttributeError:
-        file_id = update.message.voice.file_id
-
-        new_file = await context.bot.get_file(file_id)
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            file_path = os.path.join(temp_dir, "temp_audio")
-            await new_file.download_to_drive(file_path)
-            audio, sr = librosa.load(file_path)
+            count, duration = detect_silence(audio, sr)
 
     except Exception as e:
-        logger.error(f"Problema con il caricamento del file:\n{e}")
+        # TODO: handle this exception.
+        # The code work even there is this error.
+        logger.warning(
+            "⚠️ TODO: handle this exception with video messages: error with temporary directory ⚠️"
+        )
 
+    # now I can do the inference
     try:
+        #
+        if count == ceil(duration):
+            logger.info("Audio is silent, inference skipped")
+            return
+        else:
+            logger.info(f"Audio duration: {round(duration, 2)} seconds")
+
         chunks, num_chunks = whisper.get_chunks(audio, sr)
 
         decoded_message: str = ""
@@ -260,6 +250,9 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     await update.message.reply_text(
                         msg,
                         disable_notification=True,
+                    )
+                    logger.success(
+                        f"Inference done in {round(time.time() - start_time, 2)} seconds"
                     )
                     logger.success("Message sent")
                 except Exception as e:
