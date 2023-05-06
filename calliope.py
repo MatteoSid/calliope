@@ -244,6 +244,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if msg.strip() not in [
                 "Sottotitoli e revisione a cura di QTSS",
                 "Sottotitoli creati dalla comunità Amara.org",
+                "...",
             ]:
                 try:
                     await update.message.reply_text(
@@ -261,11 +262,9 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                         disable_notification=True,
                     )
             else:
-                await update.message.reply_text(
-                    "...",
-                    disable_notification=True,
+                logger.success(
+                    f"{update.message.from_user.username}: found silence in inference, skipped"
                 )
-                logger.success(f"{update.message.from_user.username}: sent '...'")
 
     except Exception as e:
         logger.error(e)
