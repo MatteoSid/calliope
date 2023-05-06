@@ -113,9 +113,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # check if is a single user or a group
     if str(update.message.chat.type) == "private":
         # check if there is stats for the user
-        if update.message.chat.username in data["single_users"]:
+        if str(update.message.from_user.id) in data["single_users"]:
             total_speech_time = timedelta(
-                seconds=data["single_users"][update.message.chat.username][
+                seconds=data["single_users"][str(update.message.from_user.id)][
                     "total_speech_time"
                 ]
             )
