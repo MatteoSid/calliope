@@ -2,9 +2,10 @@ import json
 from datetime import datetime
 
 
-def add_user(first_name: str, language_code: str, duration: int) -> dict:
+def add_user(first_name: str, username: str, language_code: str, duration: int) -> dict:
     return {
         "first_name": first_name,
+        "username": username,
         "first_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "times_used": 1,
         "last_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -22,6 +23,7 @@ def update_user(old_data: dict, duration: int) -> dict:
 
 def save_user(update) -> None:
     file_path = "stast.json"
+    user_id = update.message.from_user.id
     username = update.message.from_user.username
     first_name = update.message.from_user.first_name
     language_code = update.message.from_user.language_code
@@ -37,13 +39,13 @@ def save_user(update) -> None:
         data = {"single_users": {}, "groups": {}}
 
     if str(update.message.chat.type) == "private":
-        if username not in data["single_users"]:
-            data["single_users"][username] = add_user(
-                first_name, language_code, duration
+        if user_id not in data["single_users"]:
+            data["single_users"][user_id] = add_user(
+                first_name, username, language_code, duration
             )
         else:
-            data["single_users"][username] = update_user(
-                data["single_users"][username], duration
+            data["single_users"][user_id] = update_user(
+                data["single_users"][user_id], duration
             )
 
     elif str(update.message.chat.type) in ["group", "supergroup"]:
