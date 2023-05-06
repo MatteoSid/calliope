@@ -241,7 +241,6 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         msgs_list = split_string(decoded_message)
         for msg in msgs_list:
-            logger.info(f"{update.message.from_user.username}: {msg}")
             if msg.strip() not in [
                 "Sottotitoli e revisione a cura di QTSS",
                 "Sottotitoli creati dalla comunità Amara.org",
