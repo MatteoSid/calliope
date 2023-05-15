@@ -2,14 +2,14 @@
 # pylint: disable=unused-argument, wrong-import-position
 # This program is dedicated to the public domain under the CC0 license.
 
+
+
 import argparse
 import json
 import os
 import sys
 import tempfile
-import time
 from datetime import timedelta
-from math import ceil
 from pathlib import Path
 
 import librosa
@@ -26,9 +26,9 @@ from telegram.ext import (
     filters,
 )
 
-from inference_model import whisper_inference_model
+from utils.inference_model import whisper_inference_model
 from utils.save_users import save_user
-from utils.utils import detect_silence, format_timedelta, get_message_info, split_string
+from utils.utils import format_timedelta, split_string
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -113,9 +113,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # check if is a single user or a group
     if str(update.message.chat.type) == "private":
         # check if there is stats for the user
-        if str(update.message.from_user.id) in data["single_users"]:
+        if update.message.chat.username in data["single_users"]:
             total_speech_time = timedelta(
-                seconds=data["single_users"][str(update.message.from_user.id)][
+                seconds=data["single_users"][update.message.chat.username][
                     "total_speech_time"
                 ]
             )
@@ -149,51 +149,51 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"Request from: {update.message.from_user.username}")
-    start_time = time.time()
-
     # Save the user
     save_user(update)
 
-    file_id, message_type = get_message_info(update)
-
-    # extract the audio file from voice message or video message
     try:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            logger.info(temp_dir)
+        file_id = update.message.video_note.file_id
 
-            new_file = await context.bot.get_file(file_id)
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                logger.info(temp_dir)
 
-            if message_type == "video_note":
+                new_file = await context.bot.get_file(file_id)
                 file_video_path = os.path.join(temp_dir, "temp_video.mp4")
                 await new_file.download_to_drive(file_video_path)
                 video = VideoFileClip(file_video_path)
-                audio = video.audio
-                file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
-                audio.write_audiofile(file_audio_path, verbose=False, logger=None)
+        except Exception as e:
+            # if os.path.exists(temp_dir):
+            #     shutil.rmtree(temp_dir)
+            # TODO: handle this exception.
+            # The code work even there is this error.
+            logger.warning(
+                "⚠️ TODO: handle this exception: error with temporary directory ⚠️"
+            )
 
-            elif message_type == "voice":
-                file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
-                await new_file.download_to_drive(file_audio_path)
+        audio = video.audio
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
+            audio.write_audiofile(file_audio_path, verbose=False, logger=None)
 
             audio, sr = librosa.load(file_audio_path)
-            count, duration = detect_silence(audio, sr)
+
+    except AttributeError as e:
+        file_id = update.message.voice.file_id
+
+        new_file = await context.bot.get_file(file_id)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_path = os.path.join(temp_dir, "temp_audio")
+            await new_file.download_to_drive(file_path)
+            audio, sr = librosa.load(file_path)
 
     except Exception as e:
-        # TODO: handle this exception.
-        # The code work even there is this error.
-        logger.warning(
-            "⚠️ TODO: handle this exception with video messages: error with temporary directory ⚠️"
-        )
+        logger.error(f"Problema con il caricamento del file:\n{e}")
 
-    # now I can do the inference
     try:
-        #
-        if count == ceil(duration):
-            logger.info("Audio is silent, inference skipped")
-            return
-        else:
-            logger.info(f"Audio duration: {round(duration, 2)} seconds")
-
         chunks, num_chunks = whisper.get_chunks(audio, sr)
 
         decoded_message: str = ""
@@ -241,18 +241,15 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         msgs_list = split_string(decoded_message)
         for msg in msgs_list:
+            logger.info(f"{update.message.from_user.username}: {msg}")
             if msg.strip() not in [
                 "Sottotitoli e revisione a cura di QTSS",
                 "Sottotitoli creati dalla comunità Amara.org",
-                "...",
             ]:
                 try:
                     await update.message.reply_text(
                         msg,
                         disable_notification=True,
-                    )
-                    logger.success(
-                        f"Inference done in {round(time.time() - start_time, 2)} seconds"
                     )
                     logger.success("Message sent")
                 except Exception as e:
@@ -262,9 +259,11 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                         disable_notification=True,
                     )
             else:
-                logger.success(
-                    f"{update.message.from_user.username}: found silence in inference, skipped"
+                await update.message.reply_text(
+                    "...",
+                    disable_notification=True,
                 )
+                logger.success(f"{update.message.from_user.username}: sent '...'")
 
     except Exception as e:
         logger.error(e)

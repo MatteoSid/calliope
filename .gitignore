@@ -159,3 +159,4 @@ cython_debug/
 TOKEN.txt
 stast.json
 *ipynb
+.DS_Store
