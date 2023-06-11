@@ -30,7 +30,8 @@ from telegram.ext import (
 from utils.save_users import save_user
 from utils.utils import format_timedelta, split_string
 
-from whisper_cpp_python import Whisper
+from faster_whisper import WhisperModel
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "-v",
@@ -73,7 +74,7 @@ else:
         f.write(TOKEN)
 
 logger.info("Loading model...")
-whisper = Whisper(model_path="model/ggml-medium.bin", n_threads=8)
+whisper = model = WhisperModel("large-v2", device="auto", compute_type="int8")
 logger.info("Model loaded")
 
 
@@ -190,9 +191,12 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             file_path = os.path.join(temp_dir, "temp_audio.mp3")
             await new_file.download_to_drive(file_path)
-
-            response = whisper.transcribe(file_path, response_format="json", language="it")
-            transcription = response["text"]
+            logger.info("Transcribing...")
+            segments, info = whisper.transcribe(file_path, beam_size=2, vad_filter=True)
+            logger.info("Detected language '%s' with probability %f" % (info.language, info.language_probability))
+            transcription = ""
+            for segment in segments:
+                transcription += segment.text
 
     except Exception as e:
         logger.error(f"Problema con il caricamento del file:\n{e}")
