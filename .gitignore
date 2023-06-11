@@ -160,3 +160,4 @@ TOKEN.txt
 stast.json
 *ipynb
 .DS_Store
+model/
