@@ -26,10 +26,11 @@ from telegram.ext import (
     filters,
 )
 
-from utils.inference_model import whisper_inference_model
+#from utils.inference_model import whisper_inference_model
 from utils.save_users import save_user
 from utils.utils import format_timedelta, split_string
 
+from whisper_cpp_python import Whisper
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "-v",
@@ -72,7 +73,7 @@ else:
         f.write(TOKEN)
 
 logger.info("Loading model...")
-whisper = whisper_inference_model(new_sample_rate=16000, seconds_per_chunk=20)
+whisper = Whisper(model_path="model/ggml-medium.bin", n_threads=8)
 logger.info("Model loaded")
 
 
@@ -185,61 +186,19 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         new_file = await context.bot.get_file(file_id)
 
+
         with tempfile.TemporaryDirectory() as temp_dir:
-            file_path = os.path.join(temp_dir, "temp_audio")
+            file_path = os.path.join(temp_dir, "temp_audio.mp3")
             await new_file.download_to_drive(file_path)
-            audio, sr = librosa.load(file_path)
+
+            response = whisper.transcribe(file_path, response_format="json", language="it")
+            transcription = response["text"]
 
     except Exception as e:
         logger.error(f"Problema con il caricamento del file:\n{e}")
 
     try:
-        chunks, num_chunks = whisper.get_chunks(audio, sr)
-
-        decoded_message: str = ""
-
-        # Create a progress bar
-        current_percentage = 0
-        message = await update.message.reply_text(
-            text=f"Processing data: {current_percentage}%",
-            disable_notification=True,
-        )
-        for i, chunk in enumerate(track(chunks, description="[green]Processing data")):
-            # Transcribe the chunk
-            input_features = whisper.processor(
-                chunk, return_tensors="pt", sampling_rate=whisper.new_sr
-            ).input_features
-
-            # Generate the transcription
-            predicted_ids = whisper.model.generate(
-                input_features.to(whisper.device),
-                is_multilingual=True,
-                max_length=10000,
-            )
-
-            # Decode the transcription
-            transcription = whisper.processor.batch_decode(
-                predicted_ids, skip_special_tokens=True
-            )
-
-            decoded_message += transcription[0]
-
-            # Update the progress bar
-            current_percentage = int((i + 1) / num_chunks * 100)
-            text = f"Processing data: {current_percentage}%"
-            await context.bot.edit_message_text(
-                text=text,
-                chat_id=message.chat_id,
-                message_id=message.message_id,
-            )
-
-        # Delete the progress bar
-        await context.bot.delete_message(
-            chat_id=message.chat_id,
-            message_id=message.message_id,
-        )
-
-        msgs_list = split_string(decoded_message)
+        msgs_list = split_string(transcription)
         for msg in msgs_list:
             logger.info(f"{update.message.from_user.username}: {msg}")
             if msg.strip() not in [
