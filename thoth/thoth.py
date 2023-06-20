@@ -11,9 +11,14 @@ import sys
 import tempfile
 from datetime import timedelta
 from pathlib import Path
+import time
 
 import librosa
 import pandas as pd
+from dotenv import load_dotenv
+
+#from utils.inference_model import whisper_inference_model
+from faster_whisper import WhisperModel
 from loguru import logger
 from moviepy.editor import VideoFileClip
 from rich.progress import track
@@ -26,12 +31,10 @@ from telegram.ext import (
     filters,
 )
 
-#from utils.inference_model import whisper_inference_model
 from utils.save_users import save_user
 from utils.utils import format_timedelta, split_string
 
-from faster_whisper import WhisperModel
-
+load_dotenv() 
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "-v",
@@ -65,16 +68,10 @@ else:
 logger.info("Starting Calliope")
 
 # Get the TOKEN for logging in the bot
-token_path = Path("TOKEN.txt")
-if os.path.exists(token_path):
-    TOKEN = Path(token_path).read_text()
-else:
-    with open(token_path, "w") as f:
-        TOKEN = input("Insert your bot token: ")
-        f.write(TOKEN)
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 logger.info("Loading model...")
-whisper = model = WhisperModel("large-v2", device="auto", compute_type="int8")
+whisper = WhisperModel("large-v2", device="auto", compute_type="int8", cpu_threads=8, num_workers=8)
 logger.info("Model loaded")
 
 
@@ -191,12 +188,12 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             file_path = os.path.join(temp_dir, "temp_audio.mp3")
             await new_file.download_to_drive(file_path)
+            start_time = time.time()
             logger.info("Transcribing...")
-            segments, info = whisper.transcribe(file_path, beam_size=2, vad_filter=True)
+            segments, info = whisper.transcribe(file_path, beam_size=5, vad_filter=True)
             logger.info("Detected language '%s' with probability %f" % (info.language, info.language_probability))
-            transcription = ""
-            for segment in segments:
-                transcription += segment.text
+            transcription = "".join([segment.text for segment in segments])
+            logger.info("Transcription completed in %f seconds" % (time.time() - start_time))
 
     except Exception as e:
         logger.error(f"Problema con il caricamento del file:\n{e}")
