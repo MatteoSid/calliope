@@ -5,3 +5,6 @@ moviepy
 loguru
 pandas
 whisper-cpp-python
+faster_whisper
+python-dotenv
+yt-dlp
