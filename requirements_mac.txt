@@ -36,12 +36,16 @@ exceptiongroup==1.1.1
     # via anyio
 faster-whisper==0.6.0
     # via -r requirements_mac.in
+ffmpeg-python==0.2.0
+    # via -r requirements_mac.in
 filelock==3.12.2
     # via huggingface-hub
 flatbuffers==23.5.26
     # via onnxruntime
 fsspec==2023.6.0
     # via huggingface-hub
+future==0.18.3
+    # via ffmpeg-python
 h11==0.14.0
     # via httpcore
 httpcore==0.17.2

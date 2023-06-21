@@ -3,7 +3,9 @@
 # This program is dedicated to the public domain under the CC0 license.
 
 
-
+from __future__ import unicode_literals
+import yt_dlp
+import ffmpeg
 import argparse
 import json
 import os
@@ -229,6 +231,52 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(e)
         await update.message.reply_text(str(e))
 
+import re
+
+def is_youtube_link(text: str) -> bool:
+    pattern = r"(https?://)?(www\.)?youtube\.com/+"
+    return bool(re.match(pattern, text))
+
+
+async def ytt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    It converts a youtube video into text
+    """
+    logger.info(f"Request from: {update.message.from_user.username}")
+    # Save the user
+    #save_user(update)
+
+    if is_youtube_link(update.message.text):
+        url = update.message.text
+        with tempfile.TemporaryDirectory(dir="/tmp") as temp_dir:
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': temp_dir + '/output',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'wav',
+                }],
+            }
+            def download_from_url(url):
+                ydl.download([url])
+                stream = ffmpeg.input(temp_dir + '/output')
+                stream = ffmpeg.output(stream, temp_dir + '/output.wav')
+
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                download_from_url(url)
+                start_time = time.time()
+                segments, info = whisper.transcribe(temp_dir+"/output.wav", beam_size=5, vad_filter=True)
+                logger.info("Detected language '%s' with probability %f" % (info.language, info.language_probability))
+                transcription = "".join([segment.text for segment in segments])
+                logger.info("Transcription completed in %f seconds" % (time.time() - start_time))
+                await update.message.reply_text(transcription)
+
+
+
+
+
+
 
 def main() -> None:
     """Start the bot."""
@@ -243,6 +291,7 @@ def main() -> None:
 
     application.add_handler(MessageHandler(filters.VOICE & ~filters.COMMAND, stt))
     application.add_handler(MessageHandler(filters.VIDEO_NOTE & ~filters.COMMAND, stt))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ytt))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()
