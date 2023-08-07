@@ -3,7 +3,9 @@
 # This program is dedicated to the public domain under the CC0 license.
 
 
-
+from __future__ import unicode_literals
+import yt_dlp
+import ffmpeg
 import argparse
 import json
 import os
@@ -11,9 +13,14 @@ import sys
 import tempfile
 from datetime import timedelta
 from pathlib import Path
+import time
 
 import librosa
 import pandas as pd
+from dotenv import load_dotenv
+
+#from utils.inference_model import whisper_inference_model
+from faster_whisper import WhisperModel
 from loguru import logger
 from moviepy.editor import VideoFileClip
 from rich.progress import track
@@ -26,10 +33,10 @@ from telegram.ext import (
     filters,
 )
 
-from utils.inference_model import whisper_inference_model
 from utils.save_users import save_user
 from utils.utils import format_timedelta, split_string
 
+load_dotenv() 
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "-v",
@@ -63,16 +70,10 @@ else:
 logger.info("Starting Calliope")
 
 # Get the TOKEN for logging in the bot
-token_path = Path("TOKEN.txt")
-if os.path.exists(token_path):
-    TOKEN = Path(token_path).read_text()
-else:
-    with open(token_path, "w") as f:
-        TOKEN = input("Insert your bot token: ")
-        f.write(TOKEN)
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 logger.info("Loading model...")
-whisper = whisper_inference_model(new_sample_rate=16000, seconds_per_chunk=20)
+whisper = WhisperModel("large-v2", device="auto", compute_type="int8", cpu_threads=8, num_workers=8)
 logger.info("Model loaded")
 
 
@@ -185,61 +186,22 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         new_file = await context.bot.get_file(file_id)
 
+
         with tempfile.TemporaryDirectory() as temp_dir:
-            file_path = os.path.join(temp_dir, "temp_audio")
+            file_path = os.path.join(temp_dir, "temp_audio.mp3")
             await new_file.download_to_drive(file_path)
-            audio, sr = librosa.load(file_path)
+            start_time = time.time()
+            logger.info("Transcribing...")
+            segments, info = whisper.transcribe(file_path, beam_size=5, vad_filter=True)
+            logger.info("Detected language '%s' with probability %f" % (info.language, info.language_probability))
+            transcription = "".join([segment.text for segment in segments])
+            logger.info("Transcription completed in %f seconds" % (time.time() - start_time))
 
     except Exception as e:
         logger.error(f"Problema con il caricamento del file:\n{e}")
 
     try:
-        chunks, num_chunks = whisper.get_chunks(audio, sr)
-
-        decoded_message: str = ""
-
-        # Create a progress bar
-        current_percentage = 0
-        message = await update.message.reply_text(
-            text=f"Processing data: {current_percentage}%",
-            disable_notification=True,
-        )
-        for i, chunk in enumerate(track(chunks, description="[green]Processing data")):
-            # Transcribe the chunk
-            input_features = whisper.processor(
-                chunk, return_tensors="pt", sampling_rate=whisper.new_sr
-            ).input_features
-
-            # Generate the transcription
-            predicted_ids = whisper.model.generate(
-                input_features.to(whisper.device),
-                is_multilingual=True,
-                max_length=10000,
-            )
-
-            # Decode the transcription
-            transcription = whisper.processor.batch_decode(
-                predicted_ids, skip_special_tokens=True
-            )
-
-            decoded_message += transcription[0]
-
-            # Update the progress bar
-            current_percentage = int((i + 1) / num_chunks * 100)
-            text = f"Processing data: {current_percentage}%"
-            await context.bot.edit_message_text(
-                text=text,
-                chat_id=message.chat_id,
-                message_id=message.message_id,
-            )
-
-        # Delete the progress bar
-        await context.bot.delete_message(
-            chat_id=message.chat_id,
-            message_id=message.message_id,
-        )
-
-        msgs_list = split_string(decoded_message)
+        msgs_list = split_string(transcription)
         for msg in msgs_list:
             logger.info(f"{update.message.from_user.username}: {msg}")
             if msg.strip() not in [
@@ -269,6 +231,52 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(e)
         await update.message.reply_text(str(e))
 
+import re
+
+def is_youtube_link(text: str) -> bool:
+    pattern = r"(https?://)?(www\.)?youtube\.com/+"
+    return bool(re.match(pattern, text))
+
+
+async def ytt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    It converts a youtube video into text
+    """
+    logger.info(f"Request from: {update.message.from_user.username}")
+    # Save the user
+    #save_user(update)
+
+    if is_youtube_link(update.message.text):
+        url = update.message.text
+        with tempfile.TemporaryDirectory(dir="/tmp") as temp_dir:
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': temp_dir + '/output',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'wav',
+                }],
+            }
+            def download_from_url(url):
+                ydl.download([url])
+                stream = ffmpeg.input(temp_dir + '/output')
+                stream = ffmpeg.output(stream, temp_dir + '/output.wav')
+
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                download_from_url(url)
+                start_time = time.time()
+                segments, info = whisper.transcribe(temp_dir+"/output.wav", beam_size=5, vad_filter=True)
+                logger.info("Detected language '%s' with probability %f" % (info.language, info.language_probability))
+                transcription = "".join([segment.text for segment in segments])
+                logger.info("Transcription completed in %f seconds" % (time.time() - start_time))
+                await update.message.reply_text(transcription)
+
+
+
+
+
+
 
 def main() -> None:
     """Start the bot."""
@@ -283,6 +291,7 @@ def main() -> None:
 
     application.add_handler(MessageHandler(filters.VOICE & ~filters.COMMAND, stt))
     application.add_handler(MessageHandler(filters.VIDEO_NOTE & ~filters.COMMAND, stt))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ytt))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()
