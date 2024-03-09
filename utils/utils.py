@@ -88,3 +88,18 @@ def get_message_info(update):
         message_type = "voice"
 
     return file_id, message_type
+
+
+def get_message_duration(update):
+    try:
+        duration = update.message.video_note.duration
+    except AttributeError:
+        duration = update.message.voice.duration
+    return duration
+
+
+def get_chat_type(update):
+    if str(update.message.chat.type) == "private":
+        return "single_users"
+    elif str(update.message.chat.type) in ["group", "supergroup"]:
+        return "groups"
