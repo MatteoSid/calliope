@@ -26,9 +26,9 @@ from telegram.ext import (
 )
 
 # TODO: fix paths
-from utils.inference_model import whisper_inference_model
-from utils.save_users import Users
-from utils.utils import (
+from calliope.src.models.inference_model import whisper_inference_model
+from calliope.src.utils.save_users import Users
+from calliope.src.utils.utils import (
     format_timedelta,
     get_chat_type,
     get_message_duration,
@@ -91,7 +91,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_type = get_chat_type(update)
 
     users_db.add_user(update, chat_type=chat_type)
-    
+
     user = update.effective_user
     await update.message.reply_html(
         f"Hi {user.mention_html()}, this bot converts any voice message into text.\n\nSend or forward any voice message here and you will immediately receive the transcription.\n\nYou can also add the bot to a group and by setting it as an administrator it will convert all the audio sent in the group.\n\nHave fun!!",
