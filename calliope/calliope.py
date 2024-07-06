@@ -11,9 +11,9 @@ import tempfile
 from datetime import timedelta
 from pathlib import Path
 
+from dotenv import load_dotenv
 import librosa
 import pandas as pd
-from dotenv import load_dotenv
 from loguru import logger
 from moviepy.editor import VideoFileClip
 from rich.progress import track
@@ -38,6 +38,7 @@ from utils.utils import (
 
 load_dotenv()
 
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "-v",
@@ -46,6 +47,7 @@ parser.add_argument(
     default=False,
     help="Set it to True to enable verbose mode",
 )
+parser.add_argument("--gpu", type=int, default=0, help="Set the GPU number to use")
 args = parser.parse_args()
 
 if args.verbose:
@@ -75,6 +77,8 @@ whisper = whisper_inference_model(new_sample_rate=16000, seconds_per_chunk=20)
 logger.info("Model loaded")
 
 users_db = Users()
+
+logger.debug(f"TELEGRAM TOKEN: {os.environ.get('TELEGRAM_TOKEN')}")
 
 
 # Define a few command handlers. These usually take the two arguments update and context.

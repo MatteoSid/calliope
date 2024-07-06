@@ -1,0 +1,27 @@
+version: "3"
+
+services:
+  calliope:
+    container_name: calliope_core
+    image: calliope:v1.0
+    restart: "unless-stopped"
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - WICH_GPU=1
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # depends_on:
+    #   - postgres
+    # volumes:
+    #   - calliope-db:database
+
+volumes:
+  calliope-db:
+
+    
+
+# avvio il docker con 
+# psql -h localhost -p 5432 -U mcode -d calliope_db
+# psql -h 65.109.173.101 -p 5432 -U mcode -d calliope_db
