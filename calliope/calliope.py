@@ -11,9 +11,9 @@ import tempfile
 from datetime import timedelta
 from pathlib import Path
 
-from dotenv import load_dotenv
 import librosa
 import pandas as pd
+from dotenv import load_dotenv
 from loguru import logger
 from moviepy.editor import VideoFileClip
 from rich.progress import track
@@ -26,10 +26,9 @@ from telegram.ext import (
     filters,
 )
 
-# TODO: fix paths
-from utils.inference_model import whisper_inference_model
-from utils.save_users import Users
-from utils.utils import (
+from calliope.src.models.inference_model import whisper_inference_model
+from calliope.src.utils.save_users import Users
+from calliope.src.utils.utils import (
     format_timedelta,
     get_chat_type,
     get_message_duration,
