@@ -55,7 +55,7 @@ class MongoWriter:
             update={
                 "$set": {"last_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S")},
                 "$inc": {
-                    "times_used": 11,
+                    "times_used": 1,
                     "total_speech_time": update.message.voice.duration,
                 },
             },
