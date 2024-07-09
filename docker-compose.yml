@@ -3,7 +3,7 @@ version: "3"
 services:
   calliope:
     container_name: calliope_core
-    image: calliope:v1.0
+    image: calliope
     restart: "unless-stopped"
     runtime: nvidia
     environment:
@@ -12,16 +12,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    # depends_on:
-    #   - postgres
-    # volumes:
-    #   - calliope-db:database
+    depends_on:
+      - mongodb
+  mongodb:
+    image: mongo:8.0.0-rc6
+    container_name: "mongodb_calliope"
+    restart: "unless-stopped"
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb_calliope:/data/db
 
 volumes:
-  calliope-db:
-
-    
-
-# avvio il docker con 
-# psql -h localhost -p 5432 -U mcode -d calliope_db
-# psql -h 65.109.173.101 -p 5432 -U mcode -d calliope_db
+  mongodb_calliope:

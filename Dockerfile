@@ -3,6 +3,7 @@ FROM nvidia/cuda:12.1.0-base-ubuntu20.04
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
+ENV MONGO_HOST=192.168.50.50
 
 # Install python
 RUN apt-get update \
@@ -20,12 +21,8 @@ WORKDIR /app
 
 # Copy the current directory contents into the container at /app
 COPY calliope /app/calliope
-COPY utils /app/utils
 COPY pyproject.toml /app/
 COPY .env /app/
-
-# TODO stats.json must to be saved outside the container
-COPY stast.json /app/
 
 # Install any needed packages specified in requirements.txt
 RUN pip install --upgrade pip
