@@ -4,20 +4,18 @@
 
 
 import argparse
-import json
 import os
 import sys
 import tempfile
-from datetime import timedelta
-from pathlib import Path
 
 import librosa
-import pandas as pd
 from dotenv import load_dotenv
 from loguru import logger
 from moviepy.editor import VideoFileClip
 from rich.progress import track
 from telegram import Update
+from telegram._files.videonote import VideoNote
+from telegram._files.voice import Voice
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -27,13 +25,10 @@ from telegram.ext import (
 )
 
 from calliope.src.models.inference_model import whisper_inference_model
-from calliope.src.utils.save_users import Users
-from calliope.src.utils.utils import (
-    format_timedelta,
-    get_chat_type,
-    get_message_duration,
-    split_string,
-)
+from calliope.src.utils.MongoClient import MongoWriter
+from calliope.src.utils.utils import message_type, split_string
+
+calliope_db = MongoWriter()
 
 load_dotenv()
 
@@ -75,8 +70,6 @@ logger.info("Loading model...")
 whisper = whisper_inference_model(new_sample_rate=16000, seconds_per_chunk=20)
 logger.info("Model loaded")
 
-users_db = Users()
-
 logger.debug(f"TELEGRAM TOKEN: {os.environ.get('TELEGRAM_TOKEN')}")
 
 
@@ -85,9 +78,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
     logger.info(f"{update.message.from_user.username}: Start command")
 
-    chat_type = get_chat_type(update)
-
-    users_db.add_user(update, chat_type=chat_type)
+    calliope_db.add_user(update)
 
     user = update.effective_user
     await update.message.reply_html(
@@ -102,129 +93,94 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "This bot converts any voice/video message into a text message. All you have to do is forward any voice/video message to the bot and you will immediately receive the corresponding text message."
         + "The processing time is proportional to the duration of the voice message.\n\nTo use the bot in a group, it is sufficient to add Calliope to the group as an administrator and all audio/video messages will be "
         + "immediately converted."
-        + "\nYou can also have the stats of your use with the /stats command. It works both in the private chat and in the groups"
+        # + "\nYou can also have the stats of your use with the /stats command. It works both in the private chat and in the groups"
     )
 
 
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /stats is issued."""
-    logger.info(f"{update.message.from_user.username}: Stats command")
-    file_path = "stast.json"
+# TODO: convert in mongodb
+# async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+#     """Send a message when the command /stats is issued."""
+#     logger.info(f"{update.message.from_user.username}: Stats command")
+#     file_path = "stast.json"
 
-    try:
-        with open(file_path, "r") as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        await update.message.reply_text("Stats not found")
-        logger.error("Stats not found")
-        return
+#     try:
+#         with open(file_path, "r") as f:
+#             data = json.load(f)
+#     except FileNotFoundError:
+#         await update.message.reply_text("Stats not found")
+#         logger.error("Stats not found")
+#         return
 
-    # check if is a single user or a group
-    if str(update.message.chat.type) == "private":
-        # check if there is stats for the user
-        if str(update.message.from_user.id) in data["single_users"]:
-            total_speech_time = timedelta(
-                seconds=data["single_users"][str(update.message.from_user.id)][
-                    "total_speech_time"
-                ]
-            )
-            await update.message.reply_text(
-                f"Time speech converted:\n{format_timedelta(total_speech_time)}"
-            )
-            logger.success("Stats sent")
-        else:
-            await update.message.reply_text("Stats not found")
-            logger.error("Stats not found")
+#     # check if is a single user or a group
+#     if str(update.message.chat.type) == "private":
+#         # check if there is stats for the user
+#         if str(update.message.from_user.id) in data["single_users"]:
+#             total_speech_time = timedelta(
+#                 seconds=data["single_users"][str(update.message.from_user.id)][
+#                     "total_speech_time"
+#                 ]
+#             )
+#             await update.message.reply_text(
+#                 f"Time speech converted:\n{format_timedelta(total_speech_time)}"
+#             )
+#             logger.success("Stats sent")
+#         else:
+#             await update.message.reply_text("Stats not found")
+#             logger.error("Stats not found")
 
-    elif str(update.message.chat.type) in ["group", "supergroup"]:
-        # check if there is stats for the group
-        if str(update.message.chat.id) in data["groups"]:
-            # load user stats in a dataframe
-            members_stats = data["groups"][str(update.message.chat.id)]["members_stats"]
-            data_tmp = pd.DataFrame.from_dict(
-                members_stats, orient="index", columns=["total_speech_time"]
-            )
-            data_tmp.sort_values(by="total_speech_time", ascending=False, inplace=True)
+#     elif str(update.message.chat.type) in ["group", "supergroup"]:
+#         # check if there is stats for the group
+#         if str(update.message.chat.id) in data["groups"]:
+#             # load user stats in a dataframe
+#             members_stats = data["groups"][str(update.message.chat.id)]["members_stats"]
+#             data_tmp = pd.DataFrame.from_dict(
+#                 members_stats, orient="index", columns=["total_speech_time"]
+#             )
+#             data_tmp.sort_values(by="total_speech_time", ascending=False, inplace=True)
 
-            result = ""
-            for index, row in data_tmp.iterrows():
-                total_speech_time = timedelta(seconds=int(row["total_speech_time"]))
-                result += f"@{index}: {format_timedelta(total_speech_time)}\n"
+#             result = ""
+#             for index, row in data_tmp.iterrows():
+#                 total_speech_time = timedelta(seconds=int(row["total_speech_time"]))
+#                 result += f"@{index}: {format_timedelta(total_speech_time)}\n"
 
-            await update.message.reply_text(result)
-        else:
-            await update.message.reply_text("Stats not found")
+#             await update.message.reply_text(result)
+#         else:
+#             await update.message.reply_text("Stats not found")
 
 
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"Request from: {update.message.from_user.username}")
 
-    chat_type = get_chat_type(update)
+    calliope_db.update(update)
 
-    users_db.add_user(update, chat_type=chat_type)
+    # get audio from message
+    with tempfile.TemporaryDirectory() as temp_dir:
+        logger.info(temp_dir)
 
-    if chat_type == "single_users":
-        users_db.update_user(
-            user_id=update.message.from_user.id,
-            duration=get_message_duration(update),
-        )
-    elif chat_type == "groups":
-        users_db.update_group(
-            group_id=str(update.message.chat.id),
-            user_id=str(update.message.from_user.id),
-            duration=get_message_duration(update),
-        )
+        if message_type(update) == VideoNote:
+            file_id = update.message.video_note.file_id
 
-    # check if the message is a video message
-    try:
-        file_id = update.message.video_note.file_id
+            new_file = await context.bot.get_file(file_id)
+            file_video_path = os.path.join(temp_dir, "temp_video.mp4")
+            await new_file.download_to_drive(file_video_path)
+            video = VideoFileClip(file_video_path)
+            audio = video.audio
 
-        try:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                logger.info(temp_dir)
-
-                new_file = await context.bot.get_file(file_id)
-                file_video_path = os.path.join(temp_dir, "temp_video.mp4")
-                await new_file.download_to_drive(file_video_path)
-                video = VideoFileClip(file_video_path)
-        except Exception as e:
-            # if os.path.exists(temp_dir):
-            #     shutil.rmtree(temp_dir)
-            # TODO: handle this exception.
-            # The code work even there is this error.
-            logger.warning(
-                "⚠️ TODO: handle this exception: error with temporary directory ⚠️"
-            )
-
-        audio = video.audio
-
-        with tempfile.TemporaryDirectory() as temp_dir:
             file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
             audio.write_audiofile(file_audio_path, verbose=False, logger=None)
 
             audio, sr = librosa.load(file_audio_path)
+        elif message_type(update) == Voice:
+            file_id = update.message.voice.file_id
 
-    # check if the message is a voice message
-    except AttributeError as e:
-        file_id = update.message.voice.file_id
+            new_file = await context.bot.get_file(file_id)
 
-        new_file = await context.bot.get_file(file_id)
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            file_path = os.path.join(temp_dir, "temp_audio")
+            file_path = os.path.join(temp_dir, "temp_audio.ogg")
             await new_file.download_to_drive(file_path)
             audio, sr = librosa.load(file_path)
 
-    except Exception as e:
-        logger.error(f"Problema con il caricamento del file:\n{e}")
-
     try:
-        if chat_type == "single_users":
-            language = users_db.get_user_language(
-                user_id=str(update.message.from_user.id)
-            )
-        elif chat_type == "groups":
-            language = users_db.get_group_language(group_id=str(update.message.chat.id))
+        language = calliope_db.get_language(update)
 
         chunks, num_chunks = whisper.get_chunks(audio, sr, language=language)
 
@@ -303,20 +259,11 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    chat_type = get_chat_type(update)
     language = update.message.text.split(" ")[1]
-
-    if chat_type == "single_users":
-        users_db.update_user(
-            user_id=update.message.from_user.id, language_code=language
-        )
-    elif chat_type == "groups":
-        users_db.update_group(
-            group_id=str(update.message.chat.id), language_code=language
-        )
+    calliope_db.change_language(update=update, language=language)
 
     logger.info(f"{update.message.from_user.username}: set language to {language}")
-    # whisper.change_language(language)
+
     await update.message.reply_text(
         f"Language set to {language}",
         disable_notification=True,
@@ -332,7 +279,7 @@ def main() -> None:
     # on different commands - answer in Telegram
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("stats", stats))
+    # application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("language", change_language))
 
     application.add_handler(MessageHandler(filters.VOICE & ~filters.COMMAND, stt))

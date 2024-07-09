@@ -19,6 +19,7 @@ loguru = "^0.7.2"
 pandas = "^2.1.3"
 pydantic = "^2.6.1"
 python-dotenv = "^1.0.1"
+pymongo = "^4.8.0"
 
 
 [tool.poetry.group.dev.dependencies]
