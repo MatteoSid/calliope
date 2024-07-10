@@ -1,0 +1,16 @@
+port: 3100
+base_url: "http://127.0.0.1"
+
+# rabbitmq:
+#   stt_queue: "stt"
+#   mmer_queue: "mmer"
+#   gpt_queue: "gpt"
+#   videosmith_queue: "videosmith"
+
+mongodb:
+  host: "127.0.0.1"
+  port: 27018
+  db_name: "calliope"
+  users_collection: "users_db"
+  groups_collection: "groups_db"
+  messages_collection: "messages"

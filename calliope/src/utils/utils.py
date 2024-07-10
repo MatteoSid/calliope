@@ -4,6 +4,8 @@ from typing import List
 import librosa
 import numpy as np
 from loguru import logger
+from telegram._files.videonote import VideoNote
+from telegram._files.voice import Voice
 
 
 def split_string(string: str) -> List[str]:
@@ -27,23 +29,23 @@ def split_string(string: str) -> List[str]:
     return result
 
 
-def format_timedelta(td: timedelta) -> str:
-    """
-    Format a timedelta object into a string
-    """
-    days = td.days
-    hours, remainder = divmod(td.seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    result = []
-    if days > 0:
-        result.append(f"{days} days")
-    if hours > 0:
-        result.append(f"{hours} hours")
-    if minutes > 0:
-        result.append(f"{minutes} minutes")
-    if seconds > 0:
-        result.append(f"{seconds} seconds")
-    return " e ".join(result)
+# def format_timedelta(td: timedelta) -> str:
+#     """
+#     Format a timedelta object into a string
+#     """
+#     days = td.days
+#     hours, remainder = divmod(td.seconds, 3600)
+#     minutes, seconds = divmod(remainder, 60)
+#     result = []
+#     if days > 0:
+#         result.append(f"{days} days")
+#     if hours > 0:
+#         result.append(f"{hours} hours")
+#     if minutes > 0:
+#         result.append(f"{minutes} minutes")
+#     if seconds > 0:
+#         result.append(f"{seconds} seconds")
+#     return " e ".join(result)
 
 
 def detect_silence(audio: np.ndarray, sr: int, threshold: int = 70) -> int:
@@ -79,12 +81,8 @@ def detect_silence(audio: np.ndarray, sr: int, threshold: int = 70) -> int:
         raise e
 
 
-def get_message_info(update):
-    try:
-        file_id = update.message.video_note.file_id
-        message_type = "video_note"
-    except AttributeError:
-        file_id = update.message.voice.file_id
-        message_type = "voice"
-
-    return file_id, message_type
+def message_type(update):
+    if type(update.effective_message.effective_attachment) == Voice:
+        return Voice
+    elif type(update.effective_message.effective_attachment) == VideoNote:
+        return VideoNote
