@@ -182,7 +182,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         language = calliope_db.get_language(update)
 
-        chunks, num_chunks = whisper.get_chunks(audio, sr, language=language)
+        chunks, num_chunks = whisper.get_chunks(audio, sr, language=language or "en")
 
         decoded_message: str = ""
 
