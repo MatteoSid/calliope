@@ -69,7 +69,7 @@ class MongoWriter:
             "first_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "times_used": 0,
             "last_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "total_speech_time": update.message.voice.duration,
+            "total_speech_time": 0,
             "language_code": update.message.from_user.language_code,
         }
 
@@ -87,57 +87,69 @@ class MongoWriter:
                 "group_name": update.message.chat.title,
                 "group_id": str(update.message.chat.id),
                 "first_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "times_used": 1,
+                "times_used": 0,
                 "last_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "language_code": update.effective_user.language_code,
                 "members_stats": [self.create_new_user(update)],
             }
             self.groups_collection.insert_one(new_group)
-
-        # se il gruppo esiste aggiorno l'utente che l'ha appena usato e se non c'è lo aggiungo
-        else:
+            logger.info(f"Added new group to database: {update.message.chat.title}")
 
             self.groups_collection.update_one(
                 filter={"group_id": str(update.message.chat.id)},
                 update={
-                    "$set": {"last_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S")},
+                    "$set": {
+                        "members_stats.$[elem].last_use": datetime.now().strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        )
+                    },
                     "$inc": {
                         "times_used": 1,
+                        "members_stats.$[elem].times_used": 1,
+                        "members_stats.$[elem].total_speech_time": update.message.voice.duration,
                     },
                 },
+                array_filters=[{"elem.user_id": str(update.message.from_user.id)}],
             )
 
-            # se l'utente esiste lo aggiorno
-            for user in group["members_stats"]:
-                if user["user_id"] == str(update.message.from_user.id):
-                    self.groups_collection.update_one(
-                        filter={"group_id": str(update.message.chat.id)},
-                        update={
-                            "$set": {
-                                "members_stats.$[elem].last_use": datetime.now().strftime(
-                                    "%Y-%m-%d %H:%M:%S"
-                                )
-                            },
-                            "$inc": {
-                                "members_stats.$[elem].times_used": 1,
-                                "members_stats.$[elem].total_speech_time": update.message.voice.duration,
-                            },
-                        },
-                        array_filters=[
-                            {"elem.user_id": str(update.message.from_user.id)}
-                        ],
-                    )
-                    break
-
-            # se l'utente non esiste lo aggiungo
-            else:
+        # se il gruppo esiste aggiorno l'utente che l'ha appena usato e se non c'è lo aggiungo
+        else:
+            # cerco se l'utente esiste, se non esiste lo aggiungo
+            result = self.groups_collection.find_one(
+                {
+                    "group_id": str(update.message.chat.id),
+                    "members_stats": {
+                        "$elemMatch": {"user_id": str(update.message.from_user.id)}
+                    },
+                }
+            )
+            if not result:
                 self.groups_collection.update_one(
                     filter={"group_id": str(update.message.chat.id)},
                     update={
-                        "$inc": {"times_used": 1},
                         "$push": {"members_stats": self.create_new_user(update)},
                     },
                 )
+                logger.info(f"Added new user to group: {update.message.chat.id}")
+
+            # aggiorno sia l'utente che il gruppo
+            self.groups_collection.update_one(
+                filter={"group_id": str(update.message.chat.id)},
+                update={
+                    "$set": {
+                        "members_stats.$[elem].last_use": datetime.now().strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        ),
+                        "last_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    },
+                    "$inc": {
+                        "times_used": 1,
+                        "members_stats.$[elem].times_used": 1,
+                        "members_stats.$[elem].total_speech_time": update.message.voice.duration,
+                    },
+                },
+                array_filters=[{"elem.user_id": str(update.message.from_user.id)}],
+            )
 
     def get_language(self, update):
         if str(update.message.chat.type) == "private":
