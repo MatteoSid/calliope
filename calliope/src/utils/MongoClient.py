@@ -1,15 +1,18 @@
+from functools import lru_cache
 import os
 from datetime import datetime
 
 import pymongo
 from loguru import logger
-from telegram._files.videonote import VideoNote
-from telegram._files.voice import Voice
 
 from calliope.src.configs_manager import settings
-from calliope.src.utils.utils import message_type
 
 mongo_host = os.environ.get("MONGO_HOST", "localhost")
+
+
+@lru_cache()
+def calliope_db_init():
+    return MongoWriter()
 
 
 class MongoWriter:
@@ -162,7 +165,7 @@ class MongoWriter:
                 {"group_id": str(update.message.chat.id)}
             )
 
-        return language["language_code"]
+        return language["language_code"] or "en"
 
     def change_language(self, update, language):
         if str(update.message.chat.type) == "private":
