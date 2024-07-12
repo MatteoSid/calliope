@@ -1,6 +1,6 @@
-from functools import lru_cache
 import os
 from datetime import datetime
+from functools import lru_cache
 
 import pymongo
 from loguru import logger
@@ -21,6 +21,10 @@ class MongoWriter:
             f"mongodb://{mongo_host}:{settings['mongodb']['port']}",
         )
         self.db = self.client[settings["mongodb"]["db_name"]]
+
+        # create collections
+        self.db.create_collection("users_collection", check_exists=False)
+        self.db.create_collection("groups_collection", check_exists=False)
 
         # single users collection
         self.users_collection = self.db[settings["mongodb"]["users_collection"]]
