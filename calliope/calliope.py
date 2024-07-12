@@ -30,7 +30,7 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     # application.add_handler(CommandHandler("stats", stats))
-    application.add_handler(CommandHandler("language", change_language))
+    application.add_handler(CommandHandler("lang", change_language))
 
     application.add_handler(MessageHandler(filters.VOICE & ~filters.COMMAND, stt))
     application.add_handler(MessageHandler(filters.VIDEO_NOTE & ~filters.COMMAND, stt))

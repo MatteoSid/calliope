@@ -9,12 +9,22 @@ calliope_db = calliope_db_init()
 
 async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    language = update.message.text.split(" ")[1]
-    calliope_db.change_language(update=update, language=language)
+    try:
+        language = update.message.text.split(" ")[1]
+        calliope_db.change_language(update=update, language=language)
 
-    logger.info(f"{update.message.from_user.username}: set language to {language}")
+        logger.info(f"{update.message.from_user.username}: set language to {language}")
 
-    await update.message.reply_text(
-        f"Language set to {language}",
-        disable_notification=True,
-    )
+        await update.message.reply_text(
+            f"Language set to {language}",
+            disable_notification=True,
+        )
+    except Exception as e:
+        logger.info(
+            f"User {update.message.from_user.username or update.message.from_user.id} tried to use /lang command without specifying language"
+        )
+        await update.message.reply_markdown_v2(
+            "🚧BETA FEATURE: Choose the language you want to transcribe with the /lang command\."
+            + "\nFor example: `/lang es` for spanish or `/lang it` for italian\.",
+            disable_notification=True,
+        )
