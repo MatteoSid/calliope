@@ -1,7 +1,17 @@
+import os
+
 import numpy as np
 import torch
 from scipy.signal import resample
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
+
+if torch.cuda.is_available():
+    if os.getenv("WHICH_GPU"):
+        device = torch.device(f"cuda:{os.getenv('WHICH_GPU')}")
+    else:
+        device = torch.device("cuda:0")
+else:
+    device = torch.device("cpu")
 
 
 class whisper_inference_model:
@@ -9,7 +19,7 @@ class whisper_inference_model:
         self.new_sr = new_sample_rate
         self.samples_per_chunk = seconds_per_chunk * self.new_sr
         self.model_name = "openai/whisper-large-v3"
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = device
         self.model = WhisperForConditionalGeneration.from_pretrained(
             self.model_name
         ).to(self.device)
