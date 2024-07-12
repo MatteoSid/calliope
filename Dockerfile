@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.1.0-base-ubuntu20.04
+FROM nvidia/cuda:12.1.0-base-ubuntu22.04
 # FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
 
 # Set environment variables
@@ -27,7 +27,7 @@ COPY .env /app/
 # Install any needed packages specified in requirements.txt
 RUN pip install --upgrade pip
 RUN pip install poetry
-RUN poetry install
+RUN poetry install --no-root
 
 # Run the command to start the service
 CMD poetry run env PYTHONPATH=. python -m calliope
