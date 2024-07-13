@@ -23,7 +23,13 @@ logger.info("Starting Calliope")
 def main() -> None:
     """Start the bot."""
     # Create the Application and pass it your bot's token.
-    application = Application.builder().token(os.getenv("TELEGRAM_TOKEN")).build()
+    application = (
+        Application.builder()
+        .token(os.getenv("TELEGRAM_TOKEN"))
+        .read_timeout(60)
+        .write_timeout(60)
+        .build()
+    )
     logger.info("Application is running")
 
     # on different commands - answer in Telegram

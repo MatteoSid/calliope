@@ -1,32 +1,31 @@
+import tempfile
 from datetime import timedelta
 from typing import List
 
 import librosa
 import numpy as np
 from loguru import logger
+from telegram import Update
 from telegram._files.videonote import VideoNote
 from telegram._files.voice import Voice
 
 
-def split_string(string: str) -> List[str]:
+def split_message(message: str, max_length: int) -> list:
     """
-    Split a string into a list of strings of length < 4096.
-    :param string: the string to split
-    :return: a list of strings
+    Divide il messaggio in parti senza troncare le parole.
     """
-    if len(string) < 4096:
-        return [string]
-    words = string.split()
-    result = []
-    current_string = ""
-    for word in words:
-        if len(current_string) + len(word) > 4095:
-            result.append(current_string)
-            current_string = word
-        else:
-            current_string += f" {word}"
-    result.append(current_string)
-    return result
+    parts = []
+    while len(message) > max_length:
+        split_index = message.rfind(" ", 0, max_length)
+        if (
+            split_index == -1
+        ):  # Se non troviamo uno spazio, dividiamo al massimo della lunghezza
+            split_index = max_length
+        parts.append(message[:split_index].strip())
+        message = message[split_index:].strip()
+    if message:
+        parts.append(message)
+    return parts
 
 
 # def format_timedelta(td: timedelta) -> str:
