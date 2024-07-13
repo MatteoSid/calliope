@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime
 
 from loguru import logger
 
@@ -20,6 +21,6 @@ def logger_setter(verbose: bool) -> None:
     else:
         logger.remove(0)
         logger.add(
-            "out.log",
+            f"logs/{datetime.now().strftime('%Y-%m-%d_%H-%M')}.log",
             format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
         )

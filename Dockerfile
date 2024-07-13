@@ -1,5 +1,4 @@
-FROM nvidia/cuda:12.1.0-base-ubuntu22.04
-# FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu20.04
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -30,4 +29,4 @@ RUN pip install poetry
 RUN poetry install --no-root
 
 # Run the command to start the service
-CMD poetry run env PYTHONPATH=. python -m calliope
+CMD ["poetry", "run", "env", "PYTHONPATH=.", "python", "-m", "calliope"]
