@@ -13,7 +13,7 @@ from telegram.ext import ContextTypes
 
 from calliope.src.models.inference_model import whisper_inference_model
 from calliope.src.utils.MongoClient import calliope_db_init
-from calliope.src.utils.utils import message_type
+from calliope.src.utils.utils import message_type, split_message
 
 calliope_db = calliope_db_init()
 logger.info("Loading model...")

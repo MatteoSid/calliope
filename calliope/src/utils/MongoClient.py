@@ -7,7 +7,9 @@ from loguru import logger
 
 from calliope.src.configs_manager import settings
 
-mongo_host = os.environ.get("MONGO_HOST", "localhost")
+mongo_uri = os.environ.get(
+    "MONGO_URI", f"mongodb://localhost:{settings['mongodb']['port']}"
+)
 
 
 @lru_cache()
@@ -17,14 +19,13 @@ def calliope_db_init():
 
 class MongoWriter:
     def __init__(self) -> None:
-        self.client = pymongo.MongoClient(
-            f"mongodb://{mongo_host}:{settings['mongodb']['port']}",
-        )
+        self.client = pymongo.MongoClient(os.environ.get("MONGO_URI"))
         self.db = self.client[settings["mongodb"]["db_name"]]
 
+        # TODO: sembra che queste non servano: fare test
         # create collections
-        self.db.create_collection("users_collection", check_exists=False)
-        self.db.create_collection("groups_collection", check_exists=False)
+        # self.db.create_collection("users_collection", check_exists=False)
+        # self.db.create_collection("groups_collection", check_exists=False)
 
         # single users collection
         self.users_collection = self.db[settings["mongodb"]["users_collection"]]
@@ -32,9 +33,7 @@ class MongoWriter:
         # groups collection
         self.groups_collection = self.db[settings["mongodb"]["groups_collection"]]
 
-        logger.info(
-            f"Connected to MongoDB at {mongo_host}:{settings['mongodb']['port']}"
-        )
+        logger.info(f"Connected to MongoDB at {mongo_uri}")
 
     def update(self, update):
         try:

@@ -1,5 +1,3 @@
-version: "3"
-
 services:
   calliope:
     container_name: calliope_core
@@ -8,18 +6,21 @@ services:
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
-      - WICH_GPU=1
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - MONGO_URI=mongodb://mongodb:27017
     build:
       context: .
       dockerfile: Dockerfile
     depends_on:
       - mongodb
+    command: ["poetry", "run", "env", "PYTHONPATH=.", "python", "-m", "calliope", "-v", "True"]
+
   mongodb:
     image: mongo:8.0.0-rc6
     container_name: "mongodb_calliope"
     restart: "unless-stopped"
     ports:
-      - "27018:27017"
+      - "27017:27017"
     volumes:
       - mongodb_calliope:/data/db
 

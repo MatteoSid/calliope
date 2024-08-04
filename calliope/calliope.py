@@ -1,6 +1,5 @@
 import os
 
-from dotenv import load_dotenv
 from loguru import logger
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
@@ -8,12 +7,10 @@ from calliope.src.commands.change_language import change_language
 from calliope.src.commands.help import help_command
 from calliope.src.commands.start import start
 from calliope.src.commands.stt import stt
-from calliope.src.utils.arg_parser import args  # TODO: does we really need args?
 from calliope.src.utils.logger_setter import logger_setter
 from calliope.src.utils.MongoClient import calliope_db_init
 
-load_dotenv()
-logger_setter(verbose=args.verbose)
+logger_setter()
 
 calliope_db = calliope_db_init()
 
