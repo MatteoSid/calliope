@@ -3,6 +3,10 @@ import os
 from loguru import logger
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
+from calliope.src.utils.utils import title
+
+title()
+
 from calliope.src.commands.change_language import change_language
 from calliope.src.commands.help import help_command
 from calliope.src.commands.start import start

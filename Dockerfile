@@ -14,6 +14,8 @@ RUN apt-get update \
     && apt-get install -y python3.10 \
     && apt install -y python3-pip
 
+RUN apt update && apt install -y figlet
+
 # Set the working directory to /app
 WORKDIR /app
 

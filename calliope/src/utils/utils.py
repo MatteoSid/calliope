@@ -1,3 +1,4 @@
+import os
 import tempfile
 from datetime import timedelta
 from typing import List
@@ -85,3 +86,7 @@ def message_type(update):
         return Voice
     elif type(update.effective_message.effective_attachment) == VideoNote:
         return VideoNote
+
+
+def title():
+    os.system(f"clear && figlet -f slant 'Calliope'")
