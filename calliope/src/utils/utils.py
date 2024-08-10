@@ -1,3 +1,4 @@
+import os
 import tempfile
 from datetime import timedelta
 from typing import List
@@ -47,6 +48,7 @@ def split_message(message: str, max_length: int) -> list:
 #     return " e ".join(result)
 
 
+# TODO: introduce silence detection
 def detect_silence(audio: np.ndarray, sr: int, threshold: int = 70) -> int:
     """
     Detects the number of half seconds of total silence at the end of an audio file.
@@ -81,7 +83,22 @@ def detect_silence(audio: np.ndarray, sr: int, threshold: int = 70) -> int:
 
 
 def message_type(update):
+    """Determines the type of media attachment in a Telegram update.
+
+    Args:
+        update: A Telegram Update object.
+
+    Returns:
+        The type of media attachment (Voice or VideoNote) if present,
+        otherwise None.
+    """
     if type(update.effective_message.effective_attachment) == Voice:
         return Voice
     elif type(update.effective_message.effective_attachment) == VideoNote:
         return VideoNote
+    else:
+        return None
+
+
+def title():
+    os.system(f"clear && figlet -f slant 'Calliope'")

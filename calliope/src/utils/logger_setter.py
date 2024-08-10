@@ -3,9 +3,11 @@ from datetime import datetime
 
 from loguru import logger
 
+from calliope.src.utils.arg_parser import args
 
-def logger_setter(verbose: bool) -> None:
-    if verbose:
+
+def logger_setter() -> None:
+    if args.verbose:
         logger.configure(
             handlers=[
                 {

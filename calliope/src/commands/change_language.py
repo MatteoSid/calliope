@@ -6,9 +6,14 @@ from calliope.src.utils.MongoClient import calliope_db_init
 
 calliope_db = calliope_db_init()
 
-
+# TODO: coming soon
 async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles the /lang command to change the user's language preference.
 
+    This function extracts the desired language from the user's message and updates it in the database.
+    It then sends a confirmation message to the user. If the language is not specified,
+    it provides instructions on how to use the command.
+    """
     try:
         language = update.message.text.split(" ")[1]
         calliope_db.change_language(update=update, language=language)
