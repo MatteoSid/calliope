@@ -5,4 +5,4 @@ docker-build:
 	docker build -t calliope .
 
 docker-run:
-	docker run --gpus all calliope
+	docker run --gpus all --runtime=nvidia calliope

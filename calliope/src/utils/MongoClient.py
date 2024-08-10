@@ -19,21 +19,26 @@ def calliope_db_init():
 
 class MongoWriter:
     def __init__(self) -> None:
-        self.client = pymongo.MongoClient(os.environ.get("MONGO_URI"))
-        self.db = self.client[settings["mongodb"]["db_name"]]
+        try:
+            self.client = pymongo.MongoClient(os.environ.get("MONGO_URI"))
+            self.client.server_info()  # Check connection
+            self.db = self.client[settings["mongodb"]["db_name"]]
 
-        # TODO: sembra che queste non servano: fare test
-        # create collections
-        # self.db.create_collection("users_collection", check_exists=False)
-        # self.db.create_collection("groups_collection", check_exists=False)
+            # TODO: sembra che queste non servano: fare test
+            # create collections
+            # self.db.create_collection("users_collection", check_exists=False)
+            # self.db.create_collection("groups_collection", check_exists=False)
 
-        # single users collection
-        self.users_collection = self.db[settings["mongodb"]["users_collection"]]
+            # single users collection
+            self.users_collection = self.db[settings["mongodb"]["users_collection"]]
 
-        # groups collection
-        self.groups_collection = self.db[settings["mongodb"]["groups_collection"]]
+            # groups collection
+            self.groups_collection = self.db[settings["mongodb"]["groups_collection"]]
 
-        logger.info(f"Connected to MongoDB at {mongo_uri}")
+            logger.info(f"Connected to MongoDB at {mongo_uri}")
+        except:
+            self.client = None
+            logger.error(f"Failed to connect to MongoDB at {mongo_uri}")
 
     def update(self, update):
         try:
@@ -42,18 +47,21 @@ class MongoWriter:
             elif str(update.message.chat.type) in ["group", "supergroup"]:
                 self.update_group(update)
         except Exception as e:
-            logger.error(f"Error saving user: {e}")
+            logger.error(f"Error updating user: {e}")
 
     def add_user(self, update):
-        user = self.users_collection.find_one(
-            {"user_id": str(update.message.from_user.id)}
-        )
-        if not user:
-            new_user = self.create_new_user(update)
-            self.users_collection.insert_one(new_user)
+        try:
+            user = self.users_collection.find_one(
+                {"user_id": str(update.message.from_user.id)}
+            )
+            if not user:
+                new_user = self.create_new_user(update)
+                self.users_collection.insert_one(new_user)
+        except Exception as e:
+            logger.error(f"Error adding user: {e}")
 
     def update_single_user(self, update, time_used=0):
-        # check if user already exists
+        # update single user if it exists else create a new one
         self.add_user(update)
 
         self.users_collection.update_one(
@@ -171,13 +179,16 @@ class MongoWriter:
         return language["language_code"] or "en"
 
     def change_language(self, update, language):
-        if str(update.message.chat.type) == "private":
-            self.users_collection.update_one(
-                filter={"user_id": str(update.message.from_user.id)},
-                update={"$set": {"language_code": language}},
-            )
-        elif str(update.message.chat.type) in ["group", "supergroup"]:
-            self.groups_collection.update_one(
-                filter={"group_id": str(update.message.chat.id)},
-                update={"$set": {"language_code": language}},
-            )
+        try:
+            if str(update.message.chat.type) == "private":
+                self.users_collection.update_one(
+                    filter={"user_id": str(update.message.from_user.id)},
+                    update={"$set": {"language_code": language}},
+                )
+            elif str(update.message.chat.type) in ["group", "supergroup"]:
+                self.groups_collection.update_one(
+                    filter={"group_id": str(update.message.chat.id)},
+                    update={"$set": {"language_code": language}},
+                )
+        except Exception as e:
+            logger.error(f"Error changing language: {e}")

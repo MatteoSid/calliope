@@ -1,31 +1,33 @@
-import os
+from venv import logger
 
-import numpy as np
 import torch
 from faster_whisper import WhisperModel
-from scipy.signal import resample
 
+# TODO: deve essere testato
 if torch.cuda.is_available():
-    device = torch.device("cuda")
-    # if os.getenv("WHICH_GPU"):
-    #     device = torch.device(f"cuda:{os.getenv('WHICH_GPU')}")
-    # else:
-    #     device = torch.device("cuda:0")
+    device = "cuda"
+    logger.info("Using GPU")
 else:
-    device = torch.device("cpu")
+    device = "cpu"
+    logger.info("Using CPU")
 
 
 class whisper_inference_model:
     def __init__(self):
+        logger.info("Loading model...")
+
         self.model_name = "large-v3"
         self.device = device
-        self.model = WhisperModel(self.model_name, device="cuda")
+        self.model = WhisperModel(self.model_name, device=self.device)
         self.language = "it"
+
+        logger.info("Model loaded.")
 
     def transcrbe(self, file_audio):
         segments, info = self.model.transcribe(file_audio)
         return segments
 
+    # #TODO: coming soon
     # def change_language(self, language):
     #     self.model.config.forced_decoder_ids = self.processor.get_decoder_prompt_ids(
     #         language=language,
