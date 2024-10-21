@@ -56,7 +56,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         start_time = time.time()
-        segments = whisper.transcrbe(audio)
+        segments = whisper.transcribe(audio)
         full_transcription = ""
 
         current_message = await update.message.reply_text(

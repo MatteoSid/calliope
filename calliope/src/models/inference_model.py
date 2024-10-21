@@ -16,14 +16,14 @@ class whisper_inference_model:
     def __init__(self):
         logger.info("Loading model...")
 
-        self.model_name = "large-v3"
+        self.model_name = "deepdml/faster-whisper-large-v3-turbo-ct2"
         self.device = device
-        self.model = WhisperModel(self.model_name, device=self.device)
+        self.model = WhisperModel(self.model_name, device=self.device, device_index=0)
         self.language = "it"
 
         logger.info("Model loaded.")
 
-    def transcrbe(self, file_audio):
+    def transcribe(self, file_audio):
         segments, info = self.model.transcribe(file_audio)
         return segments
 
