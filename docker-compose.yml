@@ -20,7 +20,7 @@ services:
     container_name: "mongodb_calliope"
     restart: "unless-stopped"
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongodb_calliope:/data/db
 
