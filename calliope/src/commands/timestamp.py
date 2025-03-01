@@ -1,16 +1,11 @@
 import os
 import tempfile
-import time
 
 import librosa
-import numpy as np
-from faster_whisper import WhisperModel
+import telegram
 from loguru import logger
 from moviepy.editor import VideoFileClip
 from telegram import Update
-from telegram._files.videonote import VideoNote
-from telegram._files.voice import Voice
-from telegram.error import RetryAfter
 from telegram.ext import ContextTypes
 
 from calliope.src.models.inference_model import WhisperInferenceModel
@@ -20,10 +15,15 @@ whisper = WhisperInferenceModel()
 
 async def timestamp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
+    logger.info(f"Request from: {update.message.from_user.username}")
     with tempfile.TemporaryDirectory() as temp_dir:
-        logger.info(temp_dir)
 
-        file = await context.bot.get_file(update.effective_message.video.file_id)
+        try:
+            file = await context.bot.get_file(update.effective_message.video.file_id)
+        except telegram.error.BadRequest as e:
+            logger.error(str(e))
+            await update.message.reply_text(str(e))
+            return
         file_video_path = os.path.join(temp_dir, "temp_video.mp4")
         await file.download_to_drive(file_video_path)
         video = VideoFileClip(file_video_path)
@@ -47,3 +47,4 @@ async def timestamp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_document(
             document=open(transcript_path, "rb"), filename="trascrizione.txt"
         )
+    logger.success("Trascrizione completata")

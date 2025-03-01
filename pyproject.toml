@@ -20,7 +20,8 @@ pydantic = "^2.6.1"
 python-dotenv = "^1.0.1"
 pymongo = "^4.8.0"
 faster-whisper = "^1.0.3"
-
+ctranslate2 = "4.4.0"
+llvmlite = "^0.44.0"
 
 [tool.poetry.group.dev.dependencies]
 memory-profiler = "^0.61.0"

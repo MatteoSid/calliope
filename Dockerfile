@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu20.04
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu20.04
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -19,11 +19,12 @@ RUN apt update && apt install -y figlet
 # Set the working directory to /app
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
-COPY calliope /app/calliope
 COPY pyproject.toml /app/
 
 # Install any needed packages specified in requirements.txt
 RUN pip install --upgrade pip
 RUN pip install poetry
 RUN poetry install --no-root
+
+# Copy the current directory contents into the container at /app
+COPY calliope /app/calliope
