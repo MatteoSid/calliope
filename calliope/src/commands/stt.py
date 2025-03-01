@@ -11,13 +11,13 @@ from telegram._files.voice import Voice
 from telegram.error import RetryAfter
 from telegram.ext import ContextTypes
 
-from calliope.src.models.inference_model import whisper_inference_model
+from calliope.src.models.inference_model import WhisperInferenceModel
 from calliope.src.utils.MongoClient import calliope_db_init
 from calliope.src.utils.utils import message_type, split_message
 
 calliope_db = calliope_db_init()
 
-whisper = whisper_inference_model()
+whisper = WhisperInferenceModel()
 
 
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
