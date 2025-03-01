@@ -1,13 +1,14 @@
 services:
   calliope:
     container_name: calliope_core
-    image: calliope
+    image: calliope:1.0.0
     restart: "unless-stopped"
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
-      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - MONGO_URI=mongodb://mongodb:27017
+    env_file:
+      - .env
     build:
       context: .
       dockerfile: Dockerfile
