@@ -1,12 +1,14 @@
 import os
 import tempfile
-from datetime import timedelta
-from typing import List
+import time
+from functools import lru_cache
 
 import librosa
 import numpy as np
 from loguru import logger
-from telegram import Update
+from more_itertools import peekable
+from moviepy.editor import VideoFileClip
+from redis import Redis
 from telegram._files.videonote import VideoNote
 from telegram._files.voice import Voice
 
@@ -102,3 +104,51 @@ def message_type(update):
 
 def title():
     os.system(f"clear && figlet -f slant 'Calliope'")
+
+
+async def extract_audio(update, context):
+    with tempfile.TemporaryDirectory() as temp_dir:
+        logger.info(temp_dir)
+
+        start_time = time.time()
+        if message_type(update) == VideoNote:
+            file_id = update.message.video_note.file_id
+            duration = update.message.video_note.duration
+            new_file = await context.bot.get_file(file_id)
+            file_video_path = os.path.join(temp_dir, "temp_video.mp4")
+            await new_file.download_to_drive(file_video_path)
+            video = VideoFileClip(file_video_path)
+            audio = video.audio
+
+            file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
+            audio.write_audiofile(file_audio_path, verbose=False, logger=None)
+
+            audio, sr = librosa.load(file_audio_path)
+        elif message_type(update) == Voice:
+            file_id = update.message.voice.file_id
+            duration = update.message.voice.duration
+            new_file = await context.bot.get_file(file_id)
+
+            file_path = os.path.join(temp_dir, "temp_audio.ogg")
+            await new_file.download_to_drive(file_path)
+            audio, sr = librosa.load(file_path)
+
+        logger.info("Audio loaded in {:.2f} seconds".format(time.time() - start_time))
+        return audio, duration
+
+
+@lru_cache()
+def redis_init():
+
+    redis_conn = Redis(
+        host=os.environ.get("REDIS_HOST"),
+        port=int(os.environ.get("REDIS_PORT")),
+        db=int(os.environ.get("REDIS_DB")),
+    )
+    logger.info(
+        f"Redis: Connected at {os.environ.get('REDIS_HOST')}:{os.environ.get('REDIS_PORT')}"
+    )
+    return redis_conn
+
+
+redis_connection = redis_init()

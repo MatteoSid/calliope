@@ -1,19 +1,26 @@
 import os
 
 from loguru import logger
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    MessageHandler,
+    filters,
+)
 
+from calliope.src.commands.summrize_button import button_callback
 from calliope.src.utils.utils import title
 
 title()
 
-from calliope.src.commands.change_language import change_language
-from calliope.src.commands.help import help_command
-from calliope.src.commands.start import start
-from calliope.src.commands.stt import stt
-from calliope.src.commands.timestamp import timestamp
+from dotenv import load_dotenv
+
+from calliope.src.commands import change_language, help_command, start, stt, timestamp
 from calliope.src.utils.logger_setter import logger_setter
 from calliope.src.utils.MongoClient import calliope_db_init
+
+load_dotenv()
 
 logger_setter()
 
@@ -43,6 +50,9 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.VOICE & ~filters.COMMAND, stt))
     application.add_handler(MessageHandler(filters.VIDEO_NOTE & ~filters.COMMAND, stt))
     application.add_handler(MessageHandler(filters.VIDEO & ~filters.COMMAND, timestamp))
+
+    # FIXME: il bottone non funziona
+    application.add_handler(CallbackQueryHandler(button_callback))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()

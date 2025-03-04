@@ -1,19 +1,30 @@
+import json
 import os
 import tempfile
 import time
+from datetime import timedelta
+from uuid import uuid4
 
 import librosa
 from loguru import logger
 from moviepy.editor import VideoFileClip
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram._files.videonote import VideoNote
 from telegram._files.voice import Voice
 from telegram.error import RetryAfter
-from telegram.ext import ContextTypes
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from calliope.src.models.inference_model import WhisperInferenceModel
 from calliope.src.utils.MongoClient import calliope_db_init
-from calliope.src.utils.utils import message_type, split_message
+from calliope.src.utils.utils import (
+    extract_audio,
+    mark_last,
+    message_type,
+    redis_connection,
+    split_message,
+)
+
+redis_timeout = timedelta(minutes=60)
 
 calliope_db = calliope_db_init()
 
@@ -25,79 +36,71 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     calliope_db.update(update)
 
-    # get audio from message
-    with tempfile.TemporaryDirectory() as temp_dir:
-        logger.info(temp_dir)
-
-        start_time = time.time()
-        if message_type(update) == VideoNote:
-            file_id = update.message.video_note.file_id
-            duration = update.message.video_note.duration
-            new_file = await context.bot.get_file(file_id)
-            file_video_path = os.path.join(temp_dir, "temp_video.mp4")
-            await new_file.download_to_drive(file_video_path)
-            video = VideoFileClip(file_video_path)
-            audio = video.audio
-
-            file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
-            audio.write_audiofile(file_audio_path, verbose=False, logger=None)
-
-            audio, sr = librosa.load(file_audio_path)
-        elif message_type(update) == Voice:
-            file_id = update.message.voice.file_id
-            duration = update.message.voice.duration
-            new_file = await context.bot.get_file(file_id)
-
-            file_path = os.path.join(temp_dir, "temp_audio.ogg")
-            await new_file.download_to_drive(file_path)
-            audio, sr = librosa.load(file_path)
-
-        logger.info("Audio loaded in {:.2f} seconds".format(time.time() - start_time))
+    audio, duration = await extract_audio(update, context)
 
     try:
         start_time = time.time()
         segments = whisper.transcribe(audio)
-        full_transcription = ""
 
+        # avviso l'utente che la trascrizione è in corso
         current_message = await update.message.reply_text(
             text="[...]",
             disable_notification=True,
         )
-        for x, segment in enumerate(segments):
+
+        # unisco le trascrizioni
+        full_transcription = ""
+        for segment in segments:
             full_transcription += segment.text
-            message_parts = split_message(
-                full_transcription, 4096 - 6
-            )  # -6 per "[...]"
 
-            for i, part in enumerate(message_parts):
-                try:
-                    if i < len(message_parts) - 1:
-                        part += " [...]"
+        # se la trascrizione è troppo lunga, la divido in modo da non superare 4096 caratteri
+        message_parts = split_message(full_transcription, 4096 - 6)  # -6 per "[...]"
 
-                    if i == 0:
-                        await context.bot.edit_message_text(
-                            text=part,
-                            chat_id=current_message.chat_id,
-                            message_id=current_message.message_id,
-                        )
-                    else:
-                        current_message = await context.bot.send_message(
-                            chat_id=current_message.chat_id,
-                            text=part,
-                            disable_notification=True,
-                        )
-                except RetryAfter as e:
-                    # Workaraound for Flood Control
-                    # TODO: find a better solution
-                    logger.warning(
-                        f"{update.message.from_user.username}: Flood control, sleeping for {e.retry_after}s"
+        # Definisco bottone e markup
+        uuid = uuid4().hex
+        redis_connection.setex(uuid, redis_timeout, full_transcription)
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "Summarize", callback_data=json.dumps({"uuid": uuid})
+                )
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        for i, part in enumerate(message_parts):
+            try:
+                # Se non siamo all'ultimo pezzo, aggiungiamo un indicatore "[...]"
+                # per indicare che il testo continua.
+                if i < len(message_parts) - 1:
+                    part += " [...]"
+
+                # Se è il primo pezzo, modifichiamo il messaggio esistente.
+                if i == 0:
+                    # FIXME: se il testo viene splittato il bottone viene messo sul primo messaggio
+                    await context.bot.edit_message_text(
+                        text=part,
+                        chat_id=current_message.chat_id,
+                        message_id=current_message.message_id,
+                        reply_markup=reply_markup,
                     )
-                    logger.warning(f"message length: {duration}")
-                    time.sleep(e.retry_after)
+                # Altrimenti, inviamo un nuovo messaggio con il pezzo successivo.
+                else:
+                    current_message = await context.bot.send_message(
+                        chat_id=current_message.chat_id,
+                        text=part,
+                        disable_notification=True,
+                    )
 
-            full_transcription = message_parts[
-                -1
-            ]  # Mantieni l'ultima parte per il prossimo ciclo
+            except RetryAfter as e:
+                # Workaraound for Flood Control
+                # TODO: find a better solution
+                logger.warning(
+                    f"{update.message.from_user.username}: Flood control, sleeping for {e.retry_after}s"
+                )
+                logger.warning(f"message length: {duration}")
+                time.sleep(e.retry_after)
 
         logger.success(
             f"{update.message.from_user.username}: {full_transcription} - in {round(time.time() - start_time, 2)}s"
