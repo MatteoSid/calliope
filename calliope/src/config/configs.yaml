@@ -14,3 +14,9 @@ mongodb:
   users_collection: "users_db"
   groups_collection: "groups_db"
   messages_collection: "messages"
+
+llm:
+  provider: "openai"  # Options: "openai", "ollama", "vllm"
+  openai_api_key: ${OPENAI_API_KEY} # To be read from env
+  ollama_api_url: ${OLLAMA_API_URL:-http://localhost:11434} # Default if not set
+  vllm_api_url: ${VLLM_API_URL:-http://localhost:8000}    # Default if not set
