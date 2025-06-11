@@ -13,9 +13,10 @@ from telegram._files.videonote import VideoNote
 from telegram._files.voice import Voice
 
 
-def split_message(message: str, max_length: int) -> list:
+def split_message(message: str, max_length: int) -> tuple[list, int]:
     """
     Divide il messaggio in parti senza troncare le parole.
+    Restituisce una tupla con (lista_delle_partizioni, numero_totale_pagine).
     """
     parts = []
     while len(message) > max_length:
@@ -28,7 +29,7 @@ def split_message(message: str, max_length: int) -> list:
         message = message[split_index:].strip()
     if message:
         parts.append(message)
-    return parts
+    return parts, len(parts)
 
 
 # def format_timedelta(td: timedelta) -> str:

@@ -9,7 +9,7 @@ from telegram.ext import ContextTypes
 
 from calliope.src.models.summarization_model import SummarizationModel
 from calliope.src.utils.MongoClient import calliope_db_init
-from calliope.src.utils.utils import redis_connection
+from calliope.src.utils.utils import redis_connection, split_message
 
 # Initialize the summarization model
 summarization_model = SummarizationModel()
@@ -54,25 +54,58 @@ async def get_transcription_data(uuid: str) -> Tuple[dict, str]:
         logger.error(f"Error getting transcription data: {e}", exc_info=True)
         return None, "❌ *Errore*: Impossibile accedere al database. Riprova più tardi."
 
-def create_navigation_buttons(uuid: str, current_view: str) -> InlineKeyboardMarkup:
-    """Create navigation buttons based on current view.
+def create_navigation_buttons(uuid: str, current_view: str, current_page: int = 0, total_pages: int = 1) -> InlineKeyboardMarkup:
+    """Create navigation buttons based on current view and page.
     
-    Uses a more compact format for callback_data to avoid hitting size limits.
+    Args:
+        uuid: The unique identifier for the transcription
+        current_view: Either 'summary' or 'full'
+        current_page: Current page number (0-based)
+        total_pages: Total number of pages
     """
-    buttons = []
+    keyboard = []
     
+    # Add navigation buttons for full view
+    if current_view == VIEW_FULL and total_pages > 1:
+        nav_buttons = []
+        # Previous button (disabled on first page)
+        nav_buttons.append(
+            InlineKeyboardButton(
+                "⬅️ Indietro",
+                callback_data=f"nav:full:{uuid}:prev:{current_page}" if current_page > 0 else "noop"
+            )
+        )
+        # Page indicator
+        nav_buttons.append(
+            InlineKeyboardButton(
+                f"{current_page + 1}/{total_pages}",
+                callback_data="noop"
+            )
+        )
+        # Next button (disabled on last page)
+        nav_buttons.append(
+            InlineKeyboardButton(
+                "Avanti ➡️",
+                callback_data=f"nav:full:{uuid}:next:{current_page}" if current_page < total_pages - 1 else "noop"
+            )
+        )
+        keyboard.append(nav_buttons)
+    
+    # Add view toggle button
+    view_buttons = []
     if current_view == VIEW_SUMMARY:
-        buttons.append(InlineKeyboardButton(
+        view_buttons.append(InlineKeyboardButton(
             "⬅️ Testo Completo",
-            callback_data=f"nav:{VIEW_FULL}:{uuid}"
+            callback_data=f"nav:full:{uuid}:{min(current_page, total_pages-1)}:{total_pages}"
         ))
     else:  # VIEW_FULL
-        buttons.append(InlineKeyboardButton(
-            "Riassunto ➡️",
-            callback_data=f"nav:{VIEW_SUMMARY}:{uuid}"
+        view_buttons.append(InlineKeyboardButton(
+            "📝 Riassunto",
+            callback_data=f"summ:summary:{uuid}"
         ))
+    keyboard.append(view_buttons)
     
-    return InlineKeyboardMarkup([buttons])
+    return InlineKeyboardMarkup(keyboard)
 
 async def update_message(
     context: ContextTypes.DEFAULT_TYPE,
@@ -104,20 +137,31 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Parse callback data
         try:
             # Parse the callback data which can be in one of these formats:
-            # 1. Compact format: "action:uuid" (for summarize)
-            # 2. Navigation format: "nav:view:uuid" (for navigation)
+            # 1. Navigation with pagination: "nav:view:uuid:action:page:total_pages"
+            # 2. Navigation simple: "nav:view:uuid"
+            # 3. Summarize: "summ:view:uuid"
             parts = query.data.split(':')
             
-            if len(parts) == 2 and parts[0] == 'summ':
-                # Format: "summ:uuid"
-                action = 'summ'
-                uuid = parts[1]
-                view = VIEW_SUMMARY
-            elif len(parts) == 3 and parts[0] == 'nav':
-                # Format: "nav:view:uuid"
+            if len(parts) >= 3 and parts[0] == 'nav':
+                # Format: "nav:view:uuid[:action:current_page:total_pages]"
                 action = 'nav'
                 view = parts[1]
                 uuid = parts[2]
+                
+                # Handle pagination parameters if present
+                nav_action = parts[3] if len(parts) > 3 else None
+                current_page = int(parts[4]) if len(parts) > 4 else 0
+                total_pages = int(parts[5]) if len(parts) > 5 else None
+                
+            elif len(parts) == 3 and parts[0] == 'summ':
+                # Format: "summ:view:uuid"
+                action = 'summ'
+                view = parts[1]
+                uuid = parts[2]
+                nav_action = None
+                current_page = 0
+                total_pages = None
+                
             else:
                 # Try to parse as JSON for backward compatibility
                 try:
@@ -125,6 +169,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     action = callback_data.get('a') or callback_data.get('action')
                     uuid = callback_data.get('u') or callback_data.get('uuid')
                     view = callback_data.get('v', VIEW_SUMMARY)
+                    nav_action = None
+                    current_page = 0
+                    total_pages = None
                 except json.JSONDecodeError:
                     raise ValueError("Invalid callback data format")
             
@@ -158,17 +205,34 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.debug("Successfully retrieved transcription data from Redis")
         
         # Handle different actions
-        logger.debug(f"Handling action: {action}")
+        logger.debug(f"Handling action: {action}, view: {view}, nav_action: {nav_action}")
+        
         if action in ['summ', 'summarize']:
             logger.debug("Dispatching to handle_summarize_action")
-        if action in ['summ', 'summarize']:
             await handle_summarize_action(
                 context, query, transcription_data, uuid
             )
         elif action == 'nav':
-            await handle_navigation_action(
-                context, query, transcription_data, uuid, view
-            )
+            # For navigation, we might have pagination actions
+            if nav_action in ['prev', 'next']:
+                await handle_navigation_action(
+                    context=context, 
+                    query=query, 
+                    transcription_data=transcription_data, 
+                    target_view=view,
+                    action=nav_action, 
+                    current_page=current_page
+                )
+            else:
+                # Simple view toggle
+                await handle_navigation_action(
+                    context=context,
+                    query=query,
+                    transcription_data=transcription_data,
+                    target_view=view,
+                    current_page=current_page, 
+                    total_pages=total_pages
+                )
         else:
             logger.warning(f"Unknown action: {action}")
             await update_message(
@@ -277,43 +341,110 @@ async def handle_navigation_action(
     context: ContextTypes.DEFAULT_TYPE,
     query: CallbackQuery,
     transcription_data: dict,
-    uuid: str,
-    target_view: str
+    target_view: str,
+    action: str = None,
+    current_page: int = 0,
+    total_pages: int = None,
+    **kwargs  # Accept additional keyword arguments for future compatibility
 ) -> None:
-    """Handle navigation between summary and full text views."""
-    full_text = transcription_data.get('full_text', '')
-    summary = transcription_data.get('summary', '')
+    """Handle navigation between summary and full text views and pagination.
     
-    if target_view == VIEW_SUMMARY and not summary:
-        # If trying to view summary but it doesn't exist yet, generate it
-        await handle_summarize_action(context, query, transcription_data, uuid)
-        return
-    
-    # Prepare the appropriate response based on the target view
-    if target_view == VIEW_SUMMARY:
-        response = (
-            "📝 *Riassunto*\n\n"
-            f"{summary}\n\n"
-            "_Usa i pulsanti qui sotto per navigare tra il riassunto e il testo completo._"
+    Callback data format:
+    - nav:full:uuid:prev:current_page
+    - nav:full:uuid:next:current_page
+    - nav:full:uuid:page:total_pages
+    """
+    try:
+        full_text = transcription_data.get('full_text', '')
+        summary = transcription_data.get('summary')
+        uuid = transcription_data.get('uuid', '')  # Aggiunto per ottenere l'UUID dai dati della trascrizione
+        
+        # Handle page navigation if action is specified
+        if action in ['prev', 'next'] and target_view == VIEW_FULL:
+            current_page = int(current_page)
+            total_pages = transcription_data.get('total_pages', 1)
+            
+            # Calculate new page
+            if action == 'prev' and current_page > 0:
+                new_page = current_page - 1
+            elif action == 'next' and current_page < total_pages - 1:
+                new_page = current_page + 1
+            else:
+                new_page = current_page
+                
+            # Update current page in Redis
+            transcription_data['current_page'] = new_page
+            redis_connection.setex(
+                f"transcript:{uuid}",
+                86400,  # 24 hours
+                json.dumps(transcription_data)
+            )
+            
+            # Split the text into pages
+            message_parts, _ = split_message(full_text, 4090)
+            text = message_parts[new_page]
+            
+            # Create navigation buttons
+            reply_markup = create_navigation_buttons(
+                uuid, 
+                VIEW_FULL,
+                current_page=new_page,
+                total_pages=total_pages
+            )
+            
+        # Toggle between summary and full views
+        elif target_view == VIEW_SUMMARY:
+            if not summary:
+                await handle_summarize_action(context, query, transcription_data, uuid)
+                return
+                
+            text = f"📝 *Riassunto*\n\n{summary}"
+            reply_markup = create_navigation_buttons(
+                uuid, 
+                VIEW_SUMMARY,
+                current_page=current_page,
+                total_pages=total_pages or 1
+            )
+            
+        else:  # VIEW_FULL
+            # If coming from summary view, show first page
+            message_parts, total_pages = split_message(full_text, 4090)
+            current_page = min(int(current_page or 0), total_pages - 1)
+            text = message_parts[current_page]
+            
+            # Update total_pages in Redis if needed
+            if 'total_pages' not in transcription_data:
+                transcription_data['total_pages'] = total_pages
+                redis_connection.setex(
+                    f"transcript:{uuid}",
+                    86400,  # 24 hours
+                    json.dumps(transcription_data)
+                )
+                
+            reply_markup = create_navigation_buttons(
+                uuid, 
+                VIEW_FULL,
+                current_page=current_page,
+                total_pages=total_pages
+            )
+        
+        # Update the message
+        await update_message(
+            context,
+            query.message.chat_id,
+            query.message.message_id,
+            text,
+            reply_markup
         )
-    else:  # VIEW_FULL
-        response = (
-            "📜 *Testo Completo*\n\n"
-            f"{full_text}\n\n"
-            "_Usa i pulsanti qui sotto per tornare al riassunto._"
+        
+    except Exception as e:
+        logger.error(f"Error in handle_navigation_action: {e}", exc_info=True)
+        await update_message(
+            context,
+            query.message.chat_id,
+            query.message.message_id,
+            "❌ *Errore*: Impossibile cambiare visualizzazione o pagina."
         )
-    
-    # Create navigation buttons
-    reply_markup = create_navigation_buttons(uuid, target_view)
-    
-    # Update the message
-    await update_message(
-        context,
-        query.message.chat_id,
-        query.message.message_id,
-        response,
-        reply_markup
-    )
 
 async def log_summary_generation(query: CallbackQuery, transcription_data: dict) -> None:
     """Log the successful summary generation to the database."""
