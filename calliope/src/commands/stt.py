@@ -58,9 +58,6 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         for segment in segments:
             full_transcription += segment.text
 
-        # Faking long message for testing
-        full_transcription += "-"*20 + "\n\n" + full_transcription
-        full_transcription += "-"*20 + "\n\n" + full_transcription
         
 
         # Dividi il messaggio in pagine
