@@ -15,20 +15,45 @@ from telegram._files.voice import Voice
 
 def split_message(message: str, max_length: int) -> tuple[list, int]:
     """
-    Divide il messaggio in parti senza troncare le parole.
+    Divide il messaggio in parti di lunghezza il più possibile uguale.
     Restituisce una tupla con (lista_delle_partizioni, numero_totale_pagine).
     """
+    # Calcola il numero di parti necessarie
+    total_length = len(message)
+    if total_length <= max_length:
+        return [message], 1 if message else 0
+    
+    # Calcola il numero di parti e la lunghezza di ciascuna parte
+    num_parts = (total_length + max_length - 1) // max_length  # Arrotonda per eccesso
+    part_length = (total_length + num_parts - 1) // num_parts  # Arrotonda per eccesso
+    
     parts = []
-    while len(message) > max_length:
-        split_index = message.rfind(" ", 0, max_length)
-        if (
-            split_index == -1
-        ):  # Se non troviamo uno spazio, dividiamo al massimo della lunghezza
-            split_index = max_length
-        parts.append(message[:split_index].strip())
-        message = message[split_index:].strip()
-    if message:
-        parts.append(message)
+    start = 0
+    
+    for i in range(num_parts):
+        # Calcola la fine di questa parte
+        end = start + part_length
+        
+        # Se non è l'ultima parte, assicurati di non spezzare una parola
+        if i < num_parts - 1 and end < total_length:
+            # Cerca l'ultimo spazio nel range
+            split_at = message.rfind(' ', start, end + 1)
+            if split_at == -1 or split_at <= start:
+                # Se non c'è spazio, dividi alla lunghezza massima
+                split_at = end
+            end = split_at
+        
+        # Aggiungi la parte alla lista
+        part = message[start:end].strip()
+        if part:  # Aggiungi solo se non è vuota
+            parts.append(part)
+        
+        # Aggiorna l'inizio per la prossima parte
+        start = end
+        # Salta eventuali spazi all'inizio della prossima parte
+        while start < total_length and message[start].isspace():
+            start += 1
+    
     return parts, len(parts)
 
 

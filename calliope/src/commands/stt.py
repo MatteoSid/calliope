@@ -64,7 +64,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
 
         # Dividi il messaggio in pagine
-fu        message_parts, total_pages = split_message(full_transcription, 4090)  # 4090 per lasciare spazio ai pulsanti
+        message_parts, total_pages = split_message(full_transcription, 4090)  # 4090 per lasciare spazio ai pulsanti
         
         # Store the full transcription in Redis with a structured key
         uuid = uuid4().hex
