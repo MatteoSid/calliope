@@ -4,6 +4,7 @@ import tempfile
 import time
 from datetime import timedelta
 from uuid import uuid4
+from loguru import logger
 
 import librosa
 from loguru import logger
@@ -18,7 +19,6 @@ from calliope.src.models.inference_model import WhisperInferenceModel
 from calliope.src.utils.MongoClient import calliope_db_init
 from calliope.src.utils.utils import (
     extract_audio,
-    mark_last,
     message_type,
     redis_connection,
     split_message,
@@ -56,18 +56,44 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # se la trascrizione è troppo lunga, la divido in modo da non superare 4096 caratteri
         message_parts = split_message(full_transcription, 4096 - 6)  # -6 per "[...]"
 
-        # Definisco bottone e markup
+        # Store the full transcription in Redis
         uuid = uuid4().hex
-        redis_connection.setex(uuid, redis_timeout, full_transcription)
+        try:
+            # Ensure we're storing a string
+            if not isinstance(full_transcription, str):
+                full_transcription = str(full_transcription)
+                
+            redis_connection.setex(uuid, redis_timeout, full_transcription)
+            logger.debug(f"Stored transcription in Redis with UUID: {uuid}, length: {len(full_transcription)}")
+        except Exception as e:
+            logger.error(f"Error storing transcription in Redis: {e}")
+            # Continue anyway, the button will just not work if Redis is down
 
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "Summarize", callback_data=json.dumps({"uuid": uuid})
-                )
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        # Only show summarize button for longer messages (> 1 minute of speech)
+        word_count = len(full_transcription.split())
+        keyboard = []
+        
+        if word_count >= 140:  # ~150 words = ~1 minute of speech
+            try:
+                # Create a simple dictionary for callback data
+                callback_data = {"a": "summ", "u": uuid}  # Using shorter keys to save space
+                callback_json = json.dumps(callback_data)
+                
+                # Log the callback data for debugging
+                logger.debug(f"Callback data: {callback_json}")
+                
+                keyboard.append([
+                    InlineKeyboardButton(
+                        "📝 Riassunto", 
+                        callback_data=callback_json
+                    )
+                ])
+                logger.info(f"Added summarize button for message with {word_count} words")
+            except Exception as e:
+                logger.error(f"Error creating callback data: {e}", exc_info=True)
+                # Don't add the button if we can't create the callback data
+        
+        reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
 
         for i, part in enumerate(message_parts):
             try:

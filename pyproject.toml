@@ -10,7 +10,7 @@ python = "^3.10"
 torch = "^2.6.0"
 torchvision = "^0.21.0"
 torchaudio = "^2.6.0"
-python-telegram-bot = "^20.6"
+python-telegram-bot = "^21.0.0"  # Updated to v21 for httpx compatibility
 librosa = "^0.10.1"
 rich = "^13.6.0"
 moviepy = "^1.0.3"
@@ -23,6 +23,10 @@ faster-whisper = "^1.0.3"
 ctranslate2 = "4.4.0"
 llvmlite = "^0.44.0"
 redis = "^5.2.1"
+llama-index-core = "^0.12.41"
+llama-index-llms-ollama = "^0.6.2"
+jinja2 = "^3.1.4"  # Required for prompt templating
+more-itertools = "^10.2.0"  # Required for utilities
 
 [tool.poetry.group.dev.dependencies]
 memory-profiler = "^0.61.0"
