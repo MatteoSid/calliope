@@ -56,14 +56,27 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # se la trascrizione è troppo lunga, la divido in modo da non superare 4096 caratteri
         message_parts = split_message(full_transcription, 4096 - 6)  # -6 per "[...]"
 
-        # Store the full transcription in Redis
+        # Store the full transcription in Redis with a structured key
         uuid = uuid4().hex
         try:
             # Ensure we're storing a string
             if not isinstance(full_transcription, str):
                 full_transcription = str(full_transcription)
-                
-            redis_connection.setex(uuid, redis_timeout, full_transcription)
+            
+            # Create a structured data object
+            transcription_data = {
+                'full_text': full_transcription,
+                'summary': None,  # Will be filled when summary is generated
+                'message_id': current_message.message_id,
+                'chat_id': current_message.chat_id
+            }
+            
+            # Store in Redis with a longer timeout (24 hours)
+            redis_connection.setex(
+                f"transcript:{uuid}", 
+                86400,  # 24 hours
+                json.dumps(transcription_data)
+            )
             logger.debug(f"Stored transcription in Redis with UUID: {uuid}, length: {len(full_transcription)}")
         except Exception as e:
             logger.error(f"Error storing transcription in Redis: {e}")
@@ -75,17 +88,16 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
         if word_count >= 140:  # ~150 words = ~1 minute of speech
             try:
-                # Create a simple dictionary for callback data
-                callback_data = {"a": "summ", "u": uuid}  # Using shorter keys to save space
-                callback_json = json.dumps(callback_data)
+                # Use compact format for callback data: "action:uuid"
+                callback_data = f"summ:{uuid}"
                 
                 # Log the callback data for debugging
-                logger.debug(f"Callback data: {callback_json}")
+                logger.debug(f"Callback data: {callback_data}")
                 
                 keyboard.append([
                     InlineKeyboardButton(
                         "📝 Riassunto", 
-                        callback_data=callback_json
+                        callback_data=callback_data
                     )
                 ])
                 logger.info(f"Added summarize button for message with {word_count} words")

@@ -1,10 +1,10 @@
 import json
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 from loguru import logger
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, CallbackQuery
 from telegram.ext import ContextTypes
 
 from calliope.src.models.summarization_model import SummarizationModel
@@ -14,139 +14,330 @@ from calliope.src.utils.utils import redis_connection
 # Initialize the summarization model
 summarization_model = SummarizationModel()
 
+# Constants for view types
+VIEW_SUMMARY = "summary"
+VIEW_FULL = "full"
+
+async def get_transcription_data(uuid: str) -> Tuple[dict, str]:
+    """Get transcription data from Redis."""
+    try:
+        # Try to get the data from Redis with the new structured key
+        redis_key = f"transcript:{uuid}"
+        data = redis_connection.get(redis_key)
+        
+        if not data:
+            # Fallback to old format for backward compatibility
+            logger.debug(f"No data found with key {redis_key}, trying old format")
+            data = redis_connection.get(uuid)
+            if not data:
+                return None, "❌ *Errore*: La trascrizione non è più disponibile."
+            
+            # If we got here, we have old format data
+            if isinstance(data, bytes):
+                data = data.decode('utf-8')
+            
+            # Convert to new format
+            transcription_data = {
+                'full_text': data,
+                'summary': None,
+                'message_id': None,
+                'chat_id': None
+            }
+        else:
+            # We have data in the new format
+            if isinstance(data, bytes):
+                data = data.decode('utf-8')
+            transcription_data = json.loads(data)
+        
+        return transcription_data, ""
+    except Exception as e:
+        logger.error(f"Error getting transcription data: {e}", exc_info=True)
+        return None, "❌ *Errore*: Impossibile accedere al database. Riprova più tardi."
+
+def create_navigation_buttons(uuid: str, current_view: str) -> InlineKeyboardMarkup:
+    """Create navigation buttons based on current view.
+    
+    Uses a more compact format for callback_data to avoid hitting size limits.
+    """
+    buttons = []
+    
+    if current_view == VIEW_SUMMARY:
+        buttons.append(InlineKeyboardButton(
+            "⬅️ Testo Completo",
+            callback_data=f"nav:{VIEW_FULL}:{uuid}"
+        ))
+    else:  # VIEW_FULL
+        buttons.append(InlineKeyboardButton(
+            "Riassunto ➡️",
+            callback_data=f"nav:{VIEW_SUMMARY}:{uuid}"
+        ))
+    
+    return InlineKeyboardMarkup([buttons])
+
+async def update_message(
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    message_id: int,
+    text: str,
+    reply_markup: InlineKeyboardMarkup = None
+) -> None:
+    """Helper function to update a message with error handling."""
+    try:
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        logger.warning(f"Could not update message: {e}")
+
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the summarize button press and generate a summary of the transcription."""
+    """Handle button presses for the transcription viewer."""
     query = update.callback_query
     await query.answer()
-
-    async def update_status(text: str) -> None:
-        """Helper function to update the status message."""
-        try:
-            await context.bot.edit_message_text(
-                chat_id=query.message.chat_id,
-                message_id=query.message.message_id,
-                text=text,
-                parse_mode='Markdown'
-            )
-        except Exception as e:
-            logger.warning(f"Could not update status: {e}")
-
+    
+    logger.debug(f"Button pressed with data: {query.data}")
+    
     try:
-        # Get the original message and callback data
+        # Parse callback data
         try:
-            callback_data = json.loads(query.data)
-            # Support both old and new callback data formats
-            uuid = callback_data.get('u') or callback_data.get('uuid')
-            action = callback_data.get('a') or callback_data.get('action')
+            # Parse the callback data which can be in one of these formats:
+            # 1. Compact format: "action:uuid" (for summarize)
+            # 2. Navigation format: "nav:view:uuid" (for navigation)
+            parts = query.data.split(':')
             
-            # Log the received callback data for debugging
-            logger.debug(f"Received callback data: {callback_data}")
-            
-            # Validate callback data
-            if action not in ['summ', 'summarize'] or not uuid:
-                logger.warning(f"Invalid callback data: {callback_data}")
-                await update_status("❌ *Errore*: Dati non validi.")
-                return
-                
-        except json.JSONDecodeError as je:
-            logger.error(f"JSON decode error in callback data: {query.data}")
-            await update_status("❌ *Errore*: Formato dati non valido.")
-            return
-        except Exception as e:
-            logger.error(f"Error parsing callback data: {e}", exc_info=True)
-            await update_status("❌ *Errore*: Impossibile elaborare la richiesta.")
-            return
-
-        # Show initial status
-        await update_status("🔄 *Sto generando il riassunto...*\n\n_Questa operazione potrebbe richiedere qualche istante._")
-
-        # Get the full transcription from Redis
-        try:
-            # Try to get the data from Redis
-            full_transcription = redis_connection.get(uuid)
-            
-            # If not found, try decoding as bytes if needed
-            if full_transcription and isinstance(full_transcription, bytes):
+            if len(parts) == 2 and parts[0] == 'summ':
+                # Format: "summ:uuid"
+                action = 'summ'
+                uuid = parts[1]
+                view = VIEW_SUMMARY
+            elif len(parts) == 3 and parts[0] == 'nav':
+                # Format: "nav:view:uuid"
+                action = 'nav'
+                view = parts[1]
+                uuid = parts[2]
+            else:
+                # Try to parse as JSON for backward compatibility
                 try:
-                    full_transcription = full_transcription.decode('utf-8')
-                except UnicodeDecodeError:
-                    logger.error("Failed to decode transcription from bytes")
-                    full_transcription = None
+                    callback_data = json.loads(query.data)
+                    action = callback_data.get('a') or callback_data.get('action')
+                    uuid = callback_data.get('u') or callback_data.get('uuid')
+                    view = callback_data.get('v', VIEW_SUMMARY)
+                except json.JSONDecodeError:
+                    raise ValueError("Invalid callback data format")
             
-            if not full_transcription:
-                logger.warning(f"No transcription found for UUID: {uuid}")
-                await update_status("❌ *Errore*: La trascrizione non è più disponibile.")
-                return
+            logger.debug(f"Received callback data: action={action}, view={view}, uuid={uuid}")
+            
+            if not all([action, uuid]):
+                raise ValueError("Missing required fields in callback data")
                 
-            logger.debug(f"Retrieved transcription for UUID: {uuid}, length: {len(full_transcription)}")
-            
-        except Exception as redis_error:
-            logger.error(f"Redis error: {redis_error}", exc_info=True)
-            await update_status("❌ *Errore*: Impossibile accedere al database. Riprova più tardi.")
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Invalid callback data: {query.data} - {e}")
+            await update_message(
+                context,
+                query.message.chat_id,
+                query.message.message_id,
+                "❌ *Errore*: Dati non validi."
+            )
             return
-
-        try:
-            # Update status to show we're working on it
-            await update_status("🔍 *Analizzo la trascrizione...*\n\n_Sto elaborando il contenuto..._")
-            
-            # Generate summary
-            summary = await summarization_model.summarize(full_transcription)
-            
-            if not summary:
-                await update_status("ℹ️ *Attenzione*: Il messaggio è troppo breve per essere riassunto in modo significativo.")
-                return
-
-            # Update the message with the summary
-            response = (
-                "📝 *Riassunto*\n\n"
-                f"{summary}\n\n"
-                "_Il riassunto è stato generato automaticamente._"
+        
+        # Get transcription data from Redis
+        logger.debug(f"Getting transcription data for UUID: {uuid}")
+        transcription_data, error_msg = await get_transcription_data(uuid)
+        if not transcription_data:
+            logger.error(f"Failed to get transcription data: {error_msg}")
+            await update_message(
+                context,
+                query.message.chat_id,
+                query.message.message_id,
+                error_msg
+            )
+            return
+        logger.debug("Successfully retrieved transcription data from Redis")
+        
+        # Handle different actions
+        logger.debug(f"Handling action: {action}")
+        if action in ['summ', 'summarize']:
+            logger.debug("Dispatching to handle_summarize_action")
+        if action in ['summ', 'summarize']:
+            await handle_summarize_action(
+                context, query, transcription_data, uuid
+            )
+        elif action == 'nav':
+            await handle_navigation_action(
+                context, query, transcription_data, uuid, view
+            )
+        else:
+            logger.warning(f"Unknown action: {action}")
+            await update_message(
+                context,
+                query.message.chat_id,
+                query.message.message_id,
+                "❌ *Errore*: Azione non riconosciuta."
             )
             
-            await update_status(response)
-
-            # Log the successful summary generation
-            try:
-                db = calliope_db_init()
-                # Update user statistics
-                await db.users.update_one(
-                    {"user_id": update.effective_user.id},
-                    {
-                        "$setOnInsert": {
-                            "username": update.effective_user.username,
-                            "first_seen": datetime.utcnow()
-                        },
-                        "$set": {"last_activity": datetime.utcnow()},
-                        "$inc": {"stats.summaries_generated": 1}
-                    },
-                    upsert=True
-                )
-                logger.info(f"Generated summary for user {update.effective_user.username}")
-            except Exception as db_error:
-                logger.error(f"Database update error: {db_error}")
-
-        except Exception as e:
-            error_msg = str(e).lower()
-            logger.error(f"Error in summarization: {e}", exc_info=True)
-            
-            if "timeout" in error_msg or "timed out" in error_msg:
-                await update_status(
-                    "⏱ *Timeout*: Il riassunto sta impiegando troppo tempo. "
-                    "Prova con un messaggio più breve o riprova più tardi."
-                )
-            elif "connection" in error_msg or "unreachable" in error_msg:
-                await update_status(
-                    "🔌 *Errore di connessione*: Impossibile raggiungere il servizio di riassunto. "
-                    "Riprova più tardi."
-                )
-            else:
-                await update_status(
-                    "❌ *Errore*: Si è verificato un problema durante la generazione del riassunto. "
-                    "Riprova più tardi."
-                )
-
-    except json.JSONDecodeError:
-        await update_status("❌ *Errore*: Formato dati non valido.")
     except Exception as e:
         logger.error(f"Unexpected error in button_callback: {e}", exc_info=True)
-        await update_status("❌ *Errore*: Si è verificato un errore imprevisto. Riprova più tardi.")
+        try:
+            await update_message(
+                context,
+                query.message.chat_id,
+                query.message.message_id,
+                "❌ *Errore*: Si è verificato un errore imprevisto. Riprova più tardi."
+            )
+        except Exception as update_error:
+            logger.error(f"Failed to send error message: {update_error}")
+
+async def handle_summarize_action(
+    context: ContextTypes.DEFAULT_TYPE,
+    query: CallbackQuery,
+    transcription_data: dict,
+    uuid: str
+) -> None:
+    """Handle the summarize action."""
+    # Show initial status
+    await update_message(
+        context,
+        query.message.chat_id,
+        query.message.message_id,
+        "🔄 *Sto generando il riassunto...*\n\n_Questa operazione potrebbe richiedere qualche istante._"
+    )
+    
+    full_text = transcription_data.get('full_text', '')
+    
+    try:
+        # Update status to show we're working on it
+        await update_message(
+            context,
+            query.message.chat_id,
+            query.message.message_id,
+            "🔍 *Analizzo la trascrizione...*\n\n_Sto elaborando il contenuto..._"
+        )
+        
+        # Generate summary
+        summary = await summarization_model.summarize(full_text)
+        
+        if not summary:
+            await update_message(
+                context,
+                query.message.chat_id,
+                query.message.message_id,
+                "ℹ️ *Attenzione*: Il messaggio è troppo breve per essere riassunto in modo significativo."
+            )
+            return
+        
+        # Update the transcription data with the new summary
+        transcription_data['summary'] = summary
+        redis_key = f"transcript:{uuid}"
+        redis_connection.setex(redis_key, 86400, json.dumps(transcription_data))
+        
+        # Create the response with navigation buttons
+        response = (
+            "📝 *Riassunto*\n\n"
+            f"{summary}\n\n"
+            "_Usa i pulsanti qui sotto per navigare tra il riassunto e il testo completo._"
+        )
+        
+        # Create navigation buttons
+        reply_markup = create_navigation_buttons(uuid, VIEW_SUMMARY)
+        
+        # Update the message with the summary and navigation
+        await update_message(
+            context,
+            query.message.chat_id,
+            query.message.message_id,
+            response,
+            reply_markup
+        )
+        
+        # Log the successful summary generation
+        await log_summary_generation(query, transcription_data)
+        
+    except Exception as e:
+        error_msg = str(e).lower()
+        logger.error(f"Error in summarization: {e}", exc_info=True)
+        
+        if "timeout" in error_msg or "timed out" in error_msg:
+            msg = "⏱ *Timeout*: Il riassunto sta impiegando troppo tempo. Prova con un messaggio più breve o riprova più tardi."
+        elif "connection" in error_msg or "unreachable" in error_msg:
+            msg = "🔌 *Errore di connessione*: Impossibile raggiungere il servizio di riassunto. Riprova più tardi."
+        else:
+            msg = "❌ *Errore*: Si è verificato un problema durante la generazione del riassunto. Riprova più tardi."
+        
+        await update_message(
+            context,
+            query.message.chat_id,
+            query.message.message_id,
+            msg
+        )
+
+async def handle_navigation_action(
+    context: ContextTypes.DEFAULT_TYPE,
+    query: CallbackQuery,
+    transcription_data: dict,
+    uuid: str,
+    target_view: str
+) -> None:
+    """Handle navigation between summary and full text views."""
+    full_text = transcription_data.get('full_text', '')
+    summary = transcription_data.get('summary', '')
+    
+    if target_view == VIEW_SUMMARY and not summary:
+        # If trying to view summary but it doesn't exist yet, generate it
+        await handle_summarize_action(context, query, transcription_data, uuid)
+        return
+    
+    # Prepare the appropriate response based on the target view
+    if target_view == VIEW_SUMMARY:
+        response = (
+            "📝 *Riassunto*\n\n"
+            f"{summary}\n\n"
+            "_Usa i pulsanti qui sotto per navigare tra il riassunto e il testo completo._"
+        )
+    else:  # VIEW_FULL
+        response = (
+            "📜 *Testo Completo*\n\n"
+            f"{full_text}\n\n"
+            "_Usa i pulsanti qui sotto per tornare al riassunto._"
+        )
+    
+    # Create navigation buttons
+    reply_markup = create_navigation_buttons(uuid, target_view)
+    
+    # Update the message
+    await update_message(
+        context,
+        query.message.chat_id,
+        query.message.message_id,
+        response,
+        reply_markup
+    )
+
+async def log_summary_generation(query: CallbackQuery, transcription_data: dict) -> None:
+    """Log the successful summary generation to the database."""
+    try:
+        db = await calliope_db_init()
+        if not hasattr(db, 'users'):
+            # Create the users collection if it doesn't exist
+            await db.create_collection('users')
+        
+        # Update user statistics
+        await db.users.update_one(
+            {"user_id": query.from_user.id},
+            {
+                "$setOnInsert": {
+                    "username": query.from_user.username,
+                    "first_seen": datetime.utcnow(),
+                    "stats": {"summaries_generated": 0}  # Initialize stats if not exists
+                },
+                "$set": {"last_activity": datetime.utcnow()},
+                "$inc": {"stats.summaries_generated": 1}
+            },
+            upsert=True
+        )
+        logger.info(f"Generated summary for user {query.from_user.username}")
+    except Exception as db_error:
+        logger.error(f"Database update error: {db_error}")
+        # Don't raise the error to avoid breaking the user experience

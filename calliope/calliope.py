@@ -54,10 +54,11 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.VIDEO & ~filters.COMMAND, timestamp))
 
     # Add callback query handler for inline buttons
+    # Match patterns like 'summ:uuid' or 'nav:view:uuid'
     application.add_handler(
         CallbackQueryHandler(
             button_callback,
-            pattern=r'^{.*}$'  # Match any JSON-like pattern
+            pattern=r'^(summ|nav):[a-zA-Z0-9-_:]+$'
         )
     )
 
