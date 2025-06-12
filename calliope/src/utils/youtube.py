@@ -11,6 +11,8 @@ from calliope.src.models.inference_model import WhisperInferenceModel
 whisper = WhisperInferenceModel()
 
 def is_youtube_link(text: str) -> bool:
+    if not text:
+        return False
     youtube_pattern = r"(https?://)?(www\.)?youtube\.com/+"
     youtu_be_pattern = r"(https?://)?(www\.)?youtu\.be/+"
     return bool(re.match(youtube_pattern, text) or re.match(youtu_be_pattern, text))

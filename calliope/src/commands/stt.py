@@ -40,13 +40,17 @@ whisper = WhisperInferenceModel()
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"Request from: {update.message.from_user.username}")
 
+    if update.message.text and not is_youtube_link(update.message.text):
+        logger.warning("Invalid youtube link")
+        return
+    
     calliope_db.update(update)
 
     audio, duration = await extract_audio(update, context)
 
     try:
         start_time = time.time()
-        if is_youtube_link(update.message.text):
+        if update.message.text and is_youtube_link(update.message.text):
             segments = whisper.transcribe(audio, beam_size=5, vad_filter=True)
         else:
             segments = whisper.transcribe(audio)
