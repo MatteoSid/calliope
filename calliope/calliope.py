@@ -52,6 +52,7 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.VOICE & ~filters.COMMAND, stt))
     application.add_handler(MessageHandler(filters.VIDEO_NOTE & ~filters.COMMAND, stt))
     application.add_handler(MessageHandler(filters.VIDEO & ~filters.COMMAND, timestamp))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, stt))
 
     # Add callback query handler for inline buttons
     # Match patterns like 'summ:uuid' or 'nav:view:uuid'

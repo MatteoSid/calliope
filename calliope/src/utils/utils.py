@@ -11,6 +11,7 @@ from moviepy.editor import VideoFileClip
 from redis import Redis
 from telegram._files.videonote import VideoNote
 from telegram._files.voice import Voice
+from calliope.src.utils.youtube import is_youtube_link, youtube_to_audio
 
 
 def split_message(message: str, max_length: int) -> tuple[list, int]:
@@ -158,6 +159,12 @@ async def extract_audio(update, context):
             file_path = os.path.join(temp_dir, "temp_audio.ogg")
             await new_file.download_to_drive(file_path)
             audio, sr = librosa.load(file_path)
+
+        elif is_youtube_link(update.message.text):
+            file_path = youtube_to_audio(update, temp_dir)
+            duration = None
+            audio, sr = librosa.load(file_path)
+            
 
         logger.info("Audio loaded in {:.2f} seconds".format(time.time() - start_time))
         return audio, duration

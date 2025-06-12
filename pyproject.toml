@@ -27,6 +27,8 @@ llama-index-core = "^0.12.41"
 llama-index-llms-ollama = "^0.6.2"
 jinja2 = "^3.1.4"  # Required for prompt templating
 more-itertools = "^10.2.0"  # Required for utilities
+yt-dlp = "^2025.6.9"
+ffmpeg-python = "^0.2.0"
 
 [tool.poetry.group.dev.dependencies]
 memory-profiler = "^0.61.0"
