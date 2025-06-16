@@ -34,8 +34,8 @@ class WhisperInferenceModel:
         self.model = WhisperModel(self.model_name, device=self.device, device_index=0)
         self.language = "it"
 
-    def transcribe(self, file_audio):
-        segments, info = self.model.transcribe(file_audio)
+    def transcribe(self, file_audio, **kwargs):
+        segments, info = self.model.transcribe(file_audio, **kwargs)
         return segments
 
     # #TODO: coming soon

@@ -28,6 +28,7 @@ from calliope.src.utils.utils import (
 from calliope.src.models.inference_model import WhisperInferenceModel
 from calliope.src.utils.MongoClient import calliope_db_init
 from calliope.src.commands import change_language, help_command, start, stt, timestamp
+from calliope.src.utils.youtube import is_youtube_link, youtube_to_audio
 
 redis_timeout = timedelta(minutes=60)
 
@@ -39,13 +40,20 @@ whisper = WhisperInferenceModel()
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"Request from: {update.message.from_user.username}")
 
+    if update.message.text and not is_youtube_link(update.message.text):
+        logger.warning("Invalid youtube link")
+        return
+    
     calliope_db.update(update)
 
     audio, duration = await extract_audio(update, context)
 
     try:
         start_time = time.time()
-        segments = whisper.transcribe(audio)
+        if update.message.text and is_youtube_link(update.message.text):
+            segments = whisper.transcribe(audio, beam_size=5, vad_filter=True)
+        else:
+            segments = whisper.transcribe(audio)
 
         # avviso l'utente che la trascrizione è in corso
         current_message = await update.message.reply_text(
@@ -58,7 +66,6 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         for segment in segments:
             full_transcription += segment.text
 
-        
 
         # Dividi il messaggio in pagine
         message_parts, total_pages = split_message(full_transcription, 4090)  # 4090 per lasciare spazio ai pulsanti
