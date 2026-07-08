@@ -1,8 +1,7 @@
-import os
-
 from loguru import logger
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
+from calliope.settings import settings
 from calliope.src.utils.utils import title
 
 title()
@@ -27,7 +26,7 @@ def main() -> None:
     # Create the Application and pass it your bot's token.
     application = (
         Application.builder()
-        .token(os.getenv("TELEGRAM_TOKEN"))
+        .token(settings.telegram_token.get_secret_value())
         .read_timeout(60)
         .write_timeout(60)
         .build()

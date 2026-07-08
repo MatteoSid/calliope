@@ -1,15 +1,10 @@
-import os
 from datetime import datetime
 from functools import lru_cache
 
 import pymongo
 from loguru import logger
 
-from calliope.src.configs_manager import settings
-
-mongo_uri = os.environ.get(
-    "MONGO_URI", f"mongodb://localhost:{settings['mongodb']['port']}"
-)
+from calliope.settings import settings
 
 
 @lru_cache()
@@ -20,25 +15,20 @@ def calliope_db_init():
 class MongoWriter:
     def __init__(self) -> None:
         try:
-            self.client = pymongo.MongoClient(os.environ.get("MONGO_URI"))
+            self.client = pymongo.MongoClient(settings.mongo_uri)
             self.client.server_info()  # Check connection
-            self.db = self.client[settings["mongodb"]["db_name"]]
-
-            # TODO: sembra che queste non servano: fare test
-            # create collections
-            # self.db.create_collection("users_collection", check_exists=False)
-            # self.db.create_collection("groups_collection", check_exists=False)
+            self.db = self.client[settings.mongo_db_name]
 
             # single users collection
-            self.users_collection = self.db[settings["mongodb"]["users_collection"]]
+            self.users_collection = self.db[settings.mongo_users_collection]
 
             # groups collection
-            self.groups_collection = self.db[settings["mongodb"]["groups_collection"]]
+            self.groups_collection = self.db[settings.mongo_groups_collection]
 
-            logger.info(f"Connected to MongoDB at {mongo_uri}")
+            logger.info(f"Connected to MongoDB at {settings.mongo_uri}")
         except:
             self.client = None
-            logger.error(f"Failed to connect to MongoDB at {mongo_uri}")
+            logger.error(f"Failed to connect to MongoDB at {settings.mongo_uri}")
 
     def update(self, update):
         try:

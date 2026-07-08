@@ -1,18 +1,17 @@
 import threading
-from venv import logger
 
 import numpy as np
 import torch
 from faster_whisper import WhisperModel
 from loguru import logger
 
-# TODO: deve essere testato
-if torch.cuda.is_available():
-    device = "cuda"
-    logger.info("Using GPU")
+from calliope.settings import settings
+
+if settings.device == "auto":
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 else:
-    device = "cpu"
-    logger.info("Using CPU")
+    device = settings.device
+logger.info(f"Using {'GPU' if device == 'cuda' else 'CPU'}")
 
 
 class WhisperInferenceModel:
@@ -29,10 +28,12 @@ class WhisperInferenceModel:
         return cls._instance
 
     def _initialize(self):
-        self.model_name = "deepdml/faster-whisper-large-v3-turbo-ct2"
-        self.device = "cuda"  # Cambia in "cpu" se necessario
-        self.model = WhisperModel(self.model_name, device=self.device, device_index=0)
-        self.language = "it"
+        self.model_name = settings.whisper_model
+        self.device = device
+        self.model = WhisperModel(
+            self.model_name, device=self.device, device_index=settings.device_index
+        )
+        self.language = settings.default_language
 
     def transcribe(self, file_audio):
         segments, info = self.model.transcribe(file_audio)

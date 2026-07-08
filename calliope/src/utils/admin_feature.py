@@ -1,11 +1,7 @@
-import os
-from pathlib import Path
-
 import requests
 from loguru import logger
 
-TOKEN_PATH = Path("TOKEN.txt")
-TOKEN_CHAT_ID_PATH = Path("TOKEN_CHAT_ID.txt")
+from calliope.settings import settings
 
 
 def markdown_escape(text):
@@ -22,9 +18,9 @@ def send_to_admin(message):
 
     send_text = (
         "https://api.telegram.org/bot"
-        + os.environ.get("TELEGRAM_TOKEN")
+        + settings.telegram_token.get_secret_value()
         + "/sendMessage?chat_id="
-        + os.environ.get("ADMIN_CHAT_ID")
+        + str(settings.admin_chat_id)
         + "&parse_mode=Markdown&text="
         + message
     )

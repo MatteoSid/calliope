@@ -3,11 +3,12 @@ from datetime import datetime
 
 from loguru import logger
 
-from calliope.src.utils.arg_parser import args
+from calliope.settings import settings
 
 
 def logger_setter() -> None:
-    if args.verbose:
+    level = settings.log_level.upper()
+    if level == "DEBUG":
         logger.configure(
             handlers=[
                 {
@@ -17,6 +18,7 @@ def logger_setter() -> None:
                     " <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> -"
                     " <level>{message}</level>",
                     "colorize": True,
+                    "level": "DEBUG",
                 },
             ]
         )
@@ -25,4 +27,5 @@ def logger_setter() -> None:
         logger.add(
             f"logs/{datetime.now().strftime('%Y-%m-%d_%H-%M')}.log",
             format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+            level=level,
         )
