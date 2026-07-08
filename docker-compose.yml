@@ -1,7 +1,7 @@
 services:
   calliope:
     container_name: calliope_core
-    image: calliope
+    image: calliope:dev
     restart: "unless-stopped"
     runtime: nvidia
     environment:

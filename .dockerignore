@@ -1,0 +1,27 @@
+# Virtualenv locale (ricreato dentro il container) e cache
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Git e metadati
+.git/
+.gitignore
+.gitattributes
+
+# Notebook di sperimentazione e file di test (non parte del runtime)
+*.ipynb
+temp_audio.wav
+
+# Output operativi
+logs/
+backups/
+screenshots/
+
+# Segreti e modelli scaricati a runtime
+.env*
+model/
+
+# Documentazione e config di sviluppo che non servono nell'immagine
+ROADMAP.md
+CLAUDE.md
