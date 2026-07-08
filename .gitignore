@@ -162,3 +162,5 @@ stast.json
 .DS_Store
 model/
 poetry.lock
+# Database backups
+backups/

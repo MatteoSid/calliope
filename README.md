@@ -34,3 +34,16 @@ You can start Calliope with
 
 ## Usage
 You can forward any voice or video message to your bot runnig Calliope or you can add your bot to a group for automatically convert any voice or video message to a text.
+
+## Database backup and restore
+You can back up the MongoDB database to a single compressed file with
+
+    ./scripts/backup_db.sh
+
+The backup is saved in the `backups/` folder. To restore it (existing collections are overwritten):
+
+    ./scripts/restore_db.sh backups/<backup-file>.archive.gz
+
+Both scripts require the MongoDB container to be running (`docker compose up -d mongodb`).
+
+To move Calliope to another machine: run the backup script on the old machine, copy the backup file to the new one, start MongoDB there with `docker compose up -d mongodb`, then run the restore script with the copied file.
