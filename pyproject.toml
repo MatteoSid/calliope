@@ -7,9 +7,6 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-torch = "2.0.0"
-torchvision = "0.15.1"
-torchaudio = "2.0.1"
 python-telegram-bot = "^20.6"
 librosa = "^0.10.1"
 rich = "^13.6.0"

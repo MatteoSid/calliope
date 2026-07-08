@@ -1,14 +1,14 @@
 import threading
 
+import ctranslate2
 import numpy as np
-import torch
 from faster_whisper import WhisperModel
 from loguru import logger
 
 from calliope.settings import settings
 
 if settings.device == "auto":
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
 else:
     device = settings.device
 logger.info(f"Using {'GPU' if device == 'cuda' else 'CPU'}")
