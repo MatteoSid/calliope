@@ -4,7 +4,7 @@ import tempfile
 import librosa
 import telegram
 from loguru import logger
-from moviepy.editor import VideoFileClip
+from moviepy import VideoFileClip
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -34,7 +34,7 @@ async def timestamp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         audio = video.audio
 
         file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
-        audio.write_audiofile(file_audio_path, verbose=False, logger=None)
+        audio.write_audiofile(file_audio_path, logger=None)
 
         audio, sr = librosa.load(file_audio_path)
 

@@ -15,7 +15,7 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - mongodb
-    command: ["poetry", "run", "env", "PYTHONPATH=.", "python", "-m", "calliope"]
+    # Il comando di avvio è il CMD del Dockerfile (python -m calliope nella venv uv).
 
   mongodb:
     image: mongo:8.0.0-rc6

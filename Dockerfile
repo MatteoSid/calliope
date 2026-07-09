@@ -1,38 +1,40 @@
-FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04
 
-# Set environment variables
-# (base -runtime invece di -devel: le dipendenze sono wheel precompilate, il CUDA
-# toolkit di sviluppo non serve a runtime. cuDNN 8 + CUDA 12 restano disponibili a
-# livello di sistema per CTranslate2.)
+# Base -runtime con cuDNN 9: richiesto da ctranslate2 >= 4.5 (CTranslate2 usa
+# cuDNN 9 / cuBLAS 12 a runtime; le wheel sono precompilate, niente toolkit devel).
+
+# Binario uv dall'immagine ufficiale (nessun pip/poetry da installare).
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 ENV DEBIAN_FRONTEND=noninteractive \
-    PIP_NO_CACHE_DIR=1 \
-    POETRY_NO_INTERACTION=1 \
-    POETRY_VIRTUALENVS_IN_PROJECT=true \
-    POETRY_CACHE_DIR=/tmp/poetry_cache
+    # uv scarica un Python standalone e crea la venv in /app/.venv
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    UV_PYTHON_INSTALL_DIR=/opt/uv/python \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
-# Install python and audio dependencies
-# (python 3.10 di sistema: deadsnakes non pubblica più pacchetti per basi EOL
-# e il progetto richiede solo ^3.10)
-# figlet: banner ASCII a runtime; libsndfile1: librosa; ffmpeg: moviepy.
+# Dipendenze di sistema audio/video:
+# figlet: banner ASCII a runtime; libsndfile1: librosa; ffmpeg: moviepy/av.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        python3-pip \
+        ca-certificates \
         figlet \
         libsndfile1 \
         ffmpeg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory to /app
 WORKDIR /app
 
-COPY pyproject.toml poetry.lock /app/
+# Installa SOLO le dipendenze di produzione dal lockfile (layer cache-abile).
+# --frozen: usa uv.lock così com'è, senza ri-risolvere.
+COPY pyproject.toml uv.lock .python-version /app/
+RUN uv sync --frozen --no-dev
 
-# Install only le dipendenze di produzione (niente gruppo dev) e ripulisci la cache
-# di poetry nello stesso layer per non lasciarla nell'immagine.
-RUN pip install --upgrade pip "poetry==2.1.1" \
-    && poetry install --no-root --only main \
-    && rm -rf "$POETRY_CACHE_DIR"
-
-# Copy the current directory contents into the container at /app
+# Copia il codice dell'applicazione.
 COPY calliope /app/calliope
+
+# La venv diventa il Python di default: `python -m calliope` usa /app/.venv.
+ENV PATH="/app/.venv/bin:$PATH"
+
+CMD ["python", "-m", "calliope"]
