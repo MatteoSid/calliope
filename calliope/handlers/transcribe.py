@@ -1,33 +1,17 @@
 import asyncio
-import os
-import tempfile
 import time
 from datetime import timedelta
 
-import librosa
 from loguru import logger
-from moviepy import VideoFileClip
 from telegram import Update
-from telegram._files.videonote import VideoNote
-from telegram._files.voice import Voice
 from telegram.error import RetryAfter
 from telegram.ext import ContextTypes
 
+from calliope.media.extract import download_audio
 from calliope.media.silence import detect_silence
 from calliope.notifier import notify_error, notify_registration
 from calliope.settings import settings
 from calliope.transcription.formatting import split_message
-
-
-def message_type(update):
-    """Ritorna il tipo di attachment del messaggio (Voice o VideoNote), altrimenti None."""
-    attachment = update.effective_message.effective_attachment
-    if isinstance(attachment, Voice):
-        return Voice
-    elif isinstance(attachment, VideoNote):
-        return VideoNote
-    else:
-        return None
 
 
 async def _send_or_edit_with_retry(operation, *, max_attempts: int = 5):
@@ -61,38 +45,20 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     storage = context.bot_data["storage"]
     transcriber = context.bot_data["transcriber"]
 
-    # get audio from message
-    with tempfile.TemporaryDirectory() as temp_dir:
-        logger.info(temp_dir)
+    message = update.effective_message
+    if message is None:
+        return
 
-        start_time = time.time()
-        if message_type(update) == VideoNote:
-            file_id = update.message.video_note.file_id
-            duration = update.message.video_note.duration
-            new_file = await context.bot.get_file(file_id)
-            file_video_path = os.path.join(temp_dir, "temp_video.mp4")
-            await new_file.download_to_drive(file_video_path)
-            video = VideoFileClip(file_video_path)
-            audio = video.audio
-
-            file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
-            audio.write_audiofile(file_audio_path, logger=None)
-
-            audio, sr = librosa.load(file_audio_path)
-        elif message_type(update) == Voice:
-            file_id = update.message.voice.file_id
-            duration = update.message.voice.duration
-            new_file = await context.bot.get_file(file_id)
-
-            file_path = os.path.join(temp_dir, "temp_audio.ogg")
-            await new_file.download_to_drive(file_path)
-            audio, sr = librosa.load(file_path)
-
-        logger.info(f"Audio loaded in {time.time() - start_time:.2f} seconds")
+    # Download + estrazione audio unificati (voice/video_note via ffmpeg): un
+    # solo percorso, nessun leak di risorse, audio già mono 16 kHz.
+    start_time = time.time()
+    audio_data = await download_audio(context.bot, message)
+    duration = audio_data.duration
+    logger.info(f"Audio loaded in {time.time() - start_time:.2f} seconds")
 
     # Pre-filtro: audio senza parlato → reaction 🔇, nessuna trascrizione né
     # aggiornamento delle statistiche.
-    if detect_silence(audio, sr):
+    if detect_silence(audio_data.samples, audio_data.sample_rate):
         logger.info(
             f"{update.message.from_user.username}: silent audio, skipping transcription"
         )
@@ -107,7 +73,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         start_time = time.time()
         language = storage.get_language(update) or settings.default_language
-        segments = transcriber.transcribe(audio, language=language)
+        segments = transcriber.transcribe(audio_data.samples, language=language)
         full_transcription = ""
 
         current_message = await update.message.reply_text(
