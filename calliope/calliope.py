@@ -1,12 +1,21 @@
+from datetime import datetime
+
 from loguru import logger
 from telegram import BotCommand
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    MessageHandler,
+    filters,
+)
 
 from calliope.settings import settings
 from calliope.src.utils.utils import title
 
 title()
 
+from calliope.src.commands.admin import admin, broadcast_callback, error_handler
 from calliope.src.commands.change_language import change_language
 from calliope.src.commands.help import help_command
 from calliope.src.commands.start import start
@@ -32,7 +41,8 @@ BOT_COMMANDS = [
 
 
 async def _post_init(application: Application) -> None:
-    """Registra i comandi del bot in Telegram all'avvio."""
+    """Registra i comandi del bot e memorizza l'istante di avvio (uptime)."""
+    application.bot_data["start_time"] = datetime.now()
     await application.bot.set_my_commands(BOT_COMMANDS)
 
 
@@ -54,10 +64,17 @@ def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("lang", change_language))
+    application.add_handler(CommandHandler("admin", admin))
+    application.add_handler(
+        CallbackQueryHandler(broadcast_callback, pattern="^broadcast:")
+    )
 
     application.add_handler(MessageHandler(filters.VOICE & ~filters.COMMAND, stt))
     application.add_handler(MessageHandler(filters.VIDEO_NOTE & ~filters.COMMAND, stt))
     application.add_handler(MessageHandler(filters.VIDEO & ~filters.COMMAND, timestamp))
+
+    # Handler globale degli errori (notifica l'owner, risposta generica all'utente)
+    application.add_error_handler(error_handler)
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()

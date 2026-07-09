@@ -13,6 +13,7 @@ from telegram.ext import ContextTypes
 
 from calliope.settings import settings
 from calliope.src.models.inference_model import WhisperInferenceModel
+from calliope.src.utils.admin import notify_error, notify_registration
 from calliope.src.utils.MongoClient import calliope_db_init
 from calliope.src.utils.utils import detect_silence, message_type, split_message
 
@@ -63,7 +64,9 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     # Solo l'uso reale (audio con parlato) viene conteggiato nelle statistiche.
-    calliope_db.update(update)
+    registration = calliope_db.update(update, duration)
+    if registration:
+        await notify_registration(context.bot, registration, update)
 
     try:
         start_time = time.time()
@@ -116,5 +119,6 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
     except Exception as e:
-        logger.error(e)
-        await update.message.reply_text(str(e))
+        logger.exception(e)
+        await notify_error(context.bot, update, e)
+        await update.message.reply_text("Something went wrong, please try again.")
