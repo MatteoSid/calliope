@@ -3,7 +3,7 @@ import time
 
 from loguru import logger
 from telegram import Update
-from telegram.constants import ChatAction
+from telegram.constants import ChatAction, ReactionEmoji
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
@@ -50,16 +50,23 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     duration = audio_data.duration
     logger.info(f"Audio loaded in {time.time() - start_time:.2f} seconds")
 
-    # Pre-filtro: audio senza parlato → reaction 🔇, nessuna trascrizione né
+    # Pre-filtro: audio senza parlato → reaction 🙊, nessuna trascrizione né
     # aggiornamento delle statistiche. Il check è CPU-bound: fuori dall'event loop.
     is_silent = await asyncio.to_thread(
         detect_silence, audio_data.samples, audio_data.sample_rate
     )
     if is_silent:
         logger.info(
-            f"{update.message.from_user.username}: silent audio, skipping transcription"
+            f"{message.from_user.username}: silent audio, skipping transcription"
         )
-        await update.message.set_reaction("🔇")
+        # Solo le emoji dell'enum ReactionEmoji sono accettate da Telegram come
+        # reaction standard (🔇 non lo è → BadRequest). La reaction è puramente
+        # cosmetica: se non è possibile impostarla (permessi, ecc.) si degrada
+        # a un semplice log senza propagare all'error handler globale.
+        try:
+            await message.set_reaction(ReactionEmoji.SPEAK_NO_EVIL_MONKEY)
+        except BadRequest as e:
+            logger.warning(f"Could not set silence reaction: {e}")
         return
 
     # Solo l'uso reale (audio con parlato) viene conteggiato nelle statistiche.
