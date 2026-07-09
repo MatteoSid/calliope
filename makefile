@@ -1,4 +1,4 @@
-.PHONY: run sync lock lint format check build up down logs stop docker-run
+.PHONY: run sync lock lint format check test build up down logs stop docker-run
 
 # --- Sviluppo locale (venv uv) ---------------------------------------------
 run:              ## Avvia il bot in locale
@@ -18,6 +18,9 @@ format:           ## Formatta il codice
 	uv run ruff format calliope/
 
 check: lint       ## Alias di lint
+
+test:             ## Esegue la suite di test (pytest)
+	uv run pytest
 
 # --- Docker / compose (ambiente completo con Mongo) ------------------------
 build:            ## Build dell'immagine via compose
