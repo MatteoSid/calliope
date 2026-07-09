@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     whisper_model: str = "deepdml/faster-whisper-large-v3-turbo-ct2"
     device: Literal["auto", "cuda", "cpu"] = "auto"
     device_index: int = 0
+    # None = auto: float16 su GPU, int8 su CPU (override es. "int8_float16").
+    whisper_compute_type: str | None = None
     default_language: str | None = None  # None = auto-detect
 
     # --- Limiti / runtime ---

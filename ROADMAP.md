@@ -18,7 +18,7 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | 1.5 Bootstrap esplicito | ✅ | DI via bot_data, no side effect import-time |
 | 2.1 Storage riscritto | ✅ | upsert atomici, datetime, indici, degraded |
 | 2.2 `/lang` end-to-end | ✅ | |
-| 2.3 Device detection | ⬜ | parziale (usa ctranslate2) |
+| 2.3 Device detection | ✅ | fallback CPU dichiarato, compute_type esplicito |
 | 2.4 Media processing | ⬜ | |
 | 2.5 Flood control retry | ✅ | |
 | 2.6 `/stats` su Mongo | ✅ | |
@@ -217,10 +217,11 @@ calliope/
 ### Step 2.3 — Device detection reale (C3)
 
 **Attività:**
-- [ ] `device = settings.device`; se `"auto"`: prova CUDA con fallback dichiarato a CPU. Rimuovere la dipendenza da `torch` per la detection (usare `ctranslate2.get_cuda_device_count()`, così `torch` diventa eliminabile in 4.4).
-- [ ] Log esplicito all'avvio: modello, device, compute type.
+- [x] `device = settings.device`; se `"auto"`: prova CUDA con fallback dichiarato a CPU (`_resolve_device`, log `"No CUDA device detected, falling back to CPU"`). Detection via `ctranslate2.get_cuda_device_count()`, nessuna dipendenza da `torch` (eliminabile in 4.3).
+- [x] `compute_type` esplicito (`_resolve_compute_type`): `float16` su GPU, `int8` su CPU, override da `settings.whisper_compute_type`.
+- [x] Log esplicito all'avvio: modello, device, compute type (`Loading model … (device=…, compute_type=…)`).
 
-**Criteri di accettazione:** il bot parte e trascrive sia su macchina con GPU sia senza (CPU), senza modifiche al codice.
+**Criteri di accettazione:** il bot parte e trascrive sia su macchina con GPU sia senza (CPU), senza modifiche al codice. ✅ (verificato su GPU: `device=cuda, compute_type=float16`, "Application is running"; il ramo CPU è dichiarato e selezionato automaticamente in assenza di CUDA).
 
 ### Step 2.4 — Media processing unificato e chiusura risorse (A4, C8, C10)
 

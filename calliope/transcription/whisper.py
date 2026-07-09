@@ -17,17 +17,35 @@ class WhisperTranscriber:
     def __init__(self, settings: Settings) -> None:
         self.model_name = settings.whisper_model
         self.device = self._resolve_device(settings)
-        logger.info(f"Loading model {self.model_name} on {self.device}...")
+        self.compute_type = self._resolve_compute_type(settings, self.device)
+        logger.info(
+            f"Loading model {self.model_name} "
+            f"(device={self.device}, compute_type={self.compute_type})..."
+        )
         self.model = WhisperModel(
-            self.model_name, device=self.device, device_index=settings.device_index
+            self.model_name,
+            device=self.device,
+            device_index=settings.device_index,
+            compute_type=self.compute_type,
         )
         logger.info("Model loaded.")
 
     @staticmethod
     def _resolve_device(settings: Settings) -> str:
-        if settings.device == "auto":
-            return "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
-        return settings.device
+        """Sceglie il device: se ``auto`` prova CUDA con fallback a CPU dichiarato."""
+        if settings.device != "auto":
+            return settings.device
+        if ctranslate2.get_cuda_device_count() > 0:
+            return "cuda"
+        logger.info("No CUDA device detected, falling back to CPU")
+        return "cpu"
+
+    @staticmethod
+    def _resolve_compute_type(settings: Settings, device: str) -> str:
+        """compute_type esplicito: float16 su GPU, int8 su CPU (override da settings)."""
+        if settings.whisper_compute_type:
+            return settings.whisper_compute_type
+        return "float16" if device == "cuda" else "int8"
 
     def transcribe(self, file_audio, language: str | None = None):
         """Trascrive l'audio.
