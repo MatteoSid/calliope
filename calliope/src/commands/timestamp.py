@@ -8,9 +8,12 @@ from moviepy.editor import VideoFileClip
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from calliope.settings import settings
 from calliope.src.models.inference_model import WhisperInferenceModel
+from calliope.src.utils.MongoClient import calliope_db_init
 
 whisper = WhisperInferenceModel()
+calliope_db = calliope_db_init()
 
 
 async def timestamp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -35,7 +38,8 @@ async def timestamp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         audio, sr = librosa.load(file_audio_path)
 
     # Chiama il metodo che lavora direttamente con audio e sample rate
-    result_str = whisper.transcribe_with_timestamps(audio)
+    language = calliope_db.get_language(update) or settings.default_language
+    result_str = whisper.transcribe_with_timestamps(audio, language=language)
 
     # Scriviamo il risultato in un file di testo
     with tempfile.TemporaryDirectory() as temp_dir:
