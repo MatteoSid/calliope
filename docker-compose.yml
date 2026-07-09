@@ -14,17 +14,30 @@ services:
       context: .
       dockerfile: Dockerfile
     depends_on:
-      - mongodb
-    # Il comando di avvio è il CMD del Dockerfile (python -m calliope nella venv uv).
+      mongodb:
+        condition: service_healthy
+    volumes:
+      # Cache dei modelli scaricati a runtime: evita il ri-download a ogni
+      # ricreazione del container.
+      - calliope_hf_cache:/home/calliope/.cache/huggingface
+    # Il comando di avvio è il CMD del Dockerfile (script `calliope` nella venv uv).
 
   mongodb:
-    image: mongo:8.0.0-rc6
+    image: mongo:8.0
     container_name: "mongodb_calliope"
     restart: "unless-stopped"
-    ports:
-      - "27018:27017"
+    # Nessun port mapping verso l'host (S3): Mongo è raggiungibile solo sulla
+    # rete interna del compose (hostname "mongodb"). Per accedervi dall'host:
+    #   docker compose exec mongodb mongosh
     volumes:
       - mongodb_calliope:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
 volumes:
   mongodb_calliope:
+  calliope_hf_cache:
