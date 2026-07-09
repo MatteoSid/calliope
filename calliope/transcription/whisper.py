@@ -1,3 +1,6 @@
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
 import ctranslate2
 import numpy as np
 from faster_whisper import WhisperModel
@@ -12,6 +15,13 @@ class WhisperTranscriber:
     Va istanziato una sola volta all'avvio (in ``main``) e iniettato negli
     handler: l'``__init__`` sceglie il device e carica il modello (operazione
     costosa, nessun side effect a import-time).
+
+    L'inferenza è CPU/GPU-bound e **bloccante**: viene eseguita in un
+    ``ThreadPoolExecutor`` dedicato con un solo worker, così l'event loop resta
+    libero (il bot risponde ad altri comandi/utenti durante una trascrizione) e
+    le richieste si accodano una alla volta (una GPU = una trascrizione per
+    volta). I metodi pubblici sono coroutine da attendere; il consumo del
+    generatore lazy di faster-whisper avviene **dentro** il thread.
     """
 
     def __init__(self, settings: Settings) -> None:
@@ -28,7 +38,13 @@ class WhisperTranscriber:
             device_index=settings.device_index,
             compute_type=self.compute_type,
         )
+        # max_workers=1: le trascrizioni si serializzano naturalmente (coda).
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="whisper")
         logger.info("Model loaded.")
+
+    def shutdown(self) -> None:
+        """Arresta l'executor attendendo la trascrizione in corso (step 3.5)."""
+        self._executor.shutdown(wait=True)
 
     @staticmethod
     def _resolve_device(settings: Settings) -> str:
@@ -47,18 +63,47 @@ class WhisperTranscriber:
             return settings.whisper_compute_type
         return "float16" if device == "cuda" else "int8"
 
-    def transcribe(self, file_audio, language: str | None = None):
-        """Trascrive l'audio.
+    async def transcribe(self, file_audio, language: str | None = None) -> list:
+        """Trascrive l'audio (fuori dall'event loop) e ne ritorna i segmenti.
 
         Args:
             file_audio: array/percorso audio accettato da faster-whisper.
             language: codice lingua ISO (es. ``"it"``) per forzare la lingua;
                 ``None`` lascia l'auto-detect al modello.
-        """
-        segments, info = self.model.transcribe(file_audio, language=language)
-        return segments
 
-    def transcribe_with_timestamps(
+        Returns:
+            La lista completa dei segmenti (il generatore lazy è già consumato
+            nel thread executor).
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            self._executor, self._transcribe, file_audio, language
+        )
+
+    def _transcribe(self, file_audio, language: str | None) -> list:
+        """Corpo sincrono eseguito nel thread executor."""
+        segments, _info = self.model.transcribe(file_audio, language=language)
+        # Il generatore è lazy: consumarlo qui, nel thread, non nell'event loop.
+        return list(segments)
+
+    async def transcribe_with_timestamps(
+        self,
+        audio_data: np.ndarray,
+        return_dict: bool = False,
+        language: str | None = None,
+    ):
+        """Variante con timestamp, eseguita nel thread executor (vedi
+        :meth:`_transcribe_with_timestamps`)."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            self._executor,
+            self._transcribe_with_timestamps,
+            audio_data,
+            return_dict,
+            language,
+        )
+
+    def _transcribe_with_timestamps(
         self,
         audio_data: np.ndarray,
         return_dict: bool = False,

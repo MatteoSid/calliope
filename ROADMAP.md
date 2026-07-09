@@ -23,7 +23,7 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | 2.5 Flood control retry | ✅ | |
 | 2.6 `/stats` su Mongo | ✅ | |
 | 2.7 Silence detection | ✅ | reaction 🔇 |
-| 3.1 Inferenza off-loop | ⬜ | |
+| 3.1 Inferenza off-loop | ✅ | executor dedicato, concurrent_updates |
 | 3.2 Streaming redesign | ⬜ | |
 | 3.3 Limiti d'uso | ⬜ | |
 | 3.4 Modulo admin | ✅ | |
@@ -291,13 +291,13 @@ calliope/
 **Il cambiamento architetturale più importante del refactor.**
 
 **Attività:**
-- [ ] Incapsulare l'inferenza in un executor dedicato: `ThreadPoolExecutor(max_workers=1)` per il modello (una GPU = una trascrizione alla volta, le richieste si accodano) e chiamate via `await loop.run_in_executor(...)` / `asyncio.to_thread`.
-  - Nota: `WhisperModel.transcribe` di faster-whisper ritorna un generatore lazy — **consumarlo interamente dentro l'executor**, non nell'event loop.
-- [ ] Stesso trattamento per `librosa.load` e per qualunque chiamata CPU-bound residua.
-- [ ] Abilitare `Application.builder().concurrent_updates(True)` così i comandi (`/start`, `/help`, `/lang`) rispondono anche durante una trascrizione.
-- [ ] Feedback all'utente quando la richiesta è in coda: reaction o messaggio "🎧 in coda…" + `chat_action` "typing" durante l'elaborazione.
+- [x] Inferenza incapsulata in un executor dedicato: `WhisperTranscriber` possiede un `ThreadPoolExecutor(max_workers=1, thread_name_prefix="whisper")`; `transcribe`/`transcribe_with_timestamps` sono ora coroutine che delegano a `loop.run_in_executor(...)`. Il generatore lazy di faster-whisper è **consumato dentro il thread** (`list(segments)`), non nell'event loop.
+- [x] `detect_silence` (l'unica altra chiamata CPU-bound residua dopo la rimozione di `librosa.load` in 2.4) spostata fuori dall'event loop con `asyncio.to_thread`.
+- [x] Abilitato `Application.builder().concurrent_updates(True)`: i comandi rispondono anche durante una trascrizione.
+- [x] Feedback all'utente: placeholder `[...]` inviato **prima** dell'inferenza (ora awaitata) + `chat_action` "typing" durante l'elaborazione; su richieste accodate il placeholder compare subito e la trascrizione parte quando l'executor si libera.
+- [x] Aggiunto `WhisperTranscriber.shutdown()` (executor `shutdown(wait=True)`) — usato in 3.5.
 
-**Criteri di accettazione:** mentre gira una trascrizione lunga, `/start` da un secondo account risponde immediatamente; due vocali inviati insieme vengono processati in sequenza senza errori né mescolamenti di risposta.
+**Criteri di accettazione:** mentre gira una trascrizione lunga, `/start` da un secondo account risponde immediatamente; due vocali inviati insieme vengono processati in sequenza senza errori né mescolamenti di risposta. ✅ (verificato con test asincrono: event loop non bloccato durante l'inferenza — ticker concorrente avanza; esecuzione sul thread `whisper`; due trascrizioni concorrenti serializzate senza overlap).
 
 ### Step 3.2 — Ridisegno dello streaming dei messaggi (A9)
 

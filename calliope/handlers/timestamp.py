@@ -1,8 +1,10 @@
+import asyncio
 import io
 
 import telegram
 from loguru import logger
 from telegram import Update
+from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 
 from calliope.media.extract import download_audio
@@ -30,16 +32,22 @@ async def timestamp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     # Pre-filtro: video senza parlato → reaction 🔇, nessuna trascrizione.
-    if detect_silence(audio_data.samples, audio_data.sample_rate):
+    # Il check è CPU-bound: fuori dall'event loop.
+    is_silent = await asyncio.to_thread(
+        detect_silence, audio_data.samples, audio_data.sample_rate
+    )
+    if is_silent:
         logger.info(
             f"{update.message.from_user.username}: silent video, skipping transcription"
         )
         await update.message.set_reaction("🔇")
         return
 
-    # Trascrizione con timestamp direttamente dall'array audio.
+    # Trascrizione con timestamp direttamente dall'array audio (fuori dall'event
+    # loop). Azione "typing" come feedback durante l'elaborazione.
+    await context.bot.send_chat_action(message.chat_id, ChatAction.TYPING)
     language = storage.get_language(update) or settings.default_language
-    result_str = transcriber.transcribe_with_timestamps(
+    result_str = await transcriber.transcribe_with_timestamps(
         audio_data.samples, language=language
     )
 

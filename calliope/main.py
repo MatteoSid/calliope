@@ -54,6 +54,10 @@ def main() -> None:
         .token(settings.telegram_token.get_secret_value())
         .read_timeout(60)
         .write_timeout(60)
+        # Gestisce gli update in modo concorrente: i comandi (/start, /help, ...)
+        # rispondono anche mentre è in corso una trascrizione (che gira comunque
+        # su un thread executor dedicato, fuori dall'event loop).
+        .concurrent_updates(True)
         .post_init(_post_init)
         .build()
     )

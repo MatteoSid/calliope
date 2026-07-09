@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from loguru import logger
 from telegram import Update
+from telegram.constants import ChatAction
 from telegram.error import RetryAfter
 from telegram.ext import ContextTypes
 
@@ -57,8 +58,11 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"Audio loaded in {time.time() - start_time:.2f} seconds")
 
     # Pre-filtro: audio senza parlato → reaction 🔇, nessuna trascrizione né
-    # aggiornamento delle statistiche.
-    if detect_silence(audio_data.samples, audio_data.sample_rate):
+    # aggiornamento delle statistiche. Il check è CPU-bound: fuori dall'event loop.
+    is_silent = await asyncio.to_thread(
+        detect_silence, audio_data.samples, audio_data.sample_rate
+    )
+    if is_silent:
         logger.info(
             f"{update.message.from_user.username}: silent audio, skipping transcription"
         )
@@ -73,13 +77,18 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         start_time = time.time()
         language = storage.get_language(update) or settings.default_language
-        segments = transcriber.transcribe(audio_data.samples, language=language)
-        full_transcription = ""
 
-        current_message = await update.message.reply_text(
+        # Feedback immediato: placeholder + azione "typing" PRIMA dell'inferenza,
+        # che ora è awaitata (fuori dall'event loop) e può durare o essere in coda.
+        current_message = await message.reply_text(
             text="[...]",
             disable_notification=True,
         )
+        await context.bot.send_chat_action(message.chat_id, ChatAction.TYPING)
+
+        segments = await transcriber.transcribe(audio_data.samples, language=language)
+        full_transcription = ""
+
         for segment in segments:
             full_transcription += segment.text
             message_parts = split_message(
