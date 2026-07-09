@@ -14,7 +14,7 @@ from telegram.ext import ContextTypes
 from calliope.settings import settings
 from calliope.src.models.inference_model import WhisperInferenceModel
 from calliope.src.utils.MongoClient import calliope_db_init
-from calliope.src.utils.utils import message_type, split_message
+from calliope.src.utils.utils import detect_silence, message_type, split_message
 
 calliope_db = calliope_db_init()
 
@@ -23,8 +23,6 @@ whisper = WhisperInferenceModel()
 
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"Request from: {update.message.from_user.username}")
-
-    calliope_db.update(update)
 
     # get audio from message
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -54,6 +52,18 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             audio, sr = librosa.load(file_path)
 
         logger.info("Audio loaded in {:.2f} seconds".format(time.time() - start_time))
+
+    # Pre-filtro: audio senza parlato → reaction 🔇, nessuna trascrizione né
+    # aggiornamento delle statistiche.
+    if detect_silence(audio, sr):
+        logger.info(
+            f"{update.message.from_user.username}: silent audio, skipping transcription"
+        )
+        await update.message.set_reaction("🔇")
+        return
+
+    # Solo l'uso reale (audio con parlato) viene conteggiato nelle statistiche.
+    calliope_db.update(update)
 
     try:
         start_time = time.time()

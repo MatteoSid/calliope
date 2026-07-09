@@ -1,14 +1,12 @@
 import os
-import tempfile
 from datetime import timedelta
-from typing import List
 
-import librosa
 import numpy as np
-from loguru import logger
 from telegram import Update
 from telegram._files.videonote import VideoNote
 from telegram._files.voice import Voice
+
+from calliope.settings import settings
 
 
 def split_message(message: str, max_length: int) -> list:
@@ -55,38 +53,37 @@ def format_timedelta(td: timedelta) -> str:
     return " ".join(parts)
 
 
-# TODO: introduce silence detection
-def detect_silence(audio: np.ndarray, sr: int, threshold: int = 70) -> int:
-    """
-    Detects the number of half seconds of total silence at the end of an audio file.
+def detect_silence(audio: np.ndarray, sr: int, threshold: int | None = None) -> bool:
+    """Determina se l'audio è (essenzialmente) muto, cioè non contiene parlato.
+
+    Scandisce l'**intero** audio in finestre da 1 secondo e ne calcola l'energia
+    (somma delle ampiezze assolute). Se nessuna finestra supera la soglia,
+    l'audio è considerato muto. È un pre-filtro energetico economico: serve a
+    evitare l'inferenza su clip senza parlato.
 
     Args:
-        audio_file (str): The path to the audio file to be analyzed.
-        threshold (int, optional): The threshold value below which a half second of audio is considered silent. Defaults to 70.
+        audio: campioni audio come array NumPy (mono).
+        sr: frequenza di campionamento in Hz (dimensione della finestra da 1 s).
+        threshold: energia minima per considerare una finestra "con parlato".
+            Se ``None`` usa ``settings.silence_threshold``.
 
     Returns:
-        Tuple[int, float]: A tuple containing the number of half seconds of total silence at the end of the audio file and the duration of the audio file in seconds.
+        ``True`` se l'audio è muto (nessuna finestra sopra la soglia),
+        ``False`` se almeno una finestra contiene parlato.
     """
-    try:
-        duration = librosa.get_duration(y=audio, sr=sr) * 1000  # in milliseconds
-        seconds = []
+    if threshold is None:
+        threshold = settings.silence_threshold
 
-        # transform the amplitude of the audio signal into decibels for every 0.5 seconds
-        for s in range(0, len(audio), int(sr)):
-            seconds.append(np.abs(audio[s : s + int(sr)]).sum())
+    window = int(sr)
+    if window <= 0 or len(audio) == 0:
+        return True
 
-        seconds = seconds[::-1]
+    for start in range(0, len(audio), window):
+        window_energy = np.abs(audio[start : start + window]).sum()
+        if window_energy >= threshold:
+            return False  # trovata una finestra con parlato
 
-        count = 0
-        for s in seconds:
-            if s < threshold:
-                count += 1
-            else:
-                break
-        return count, duration / 1000
-    except Exception as e:
-        logger.exception(e)
-        raise e
+    return True  # nessuna finestra sopra la soglia → audio muto
 
 
 def message_type(update):
