@@ -1,8 +1,20 @@
 run:
-	poetry run env PYTHONPATH=. python -m calliope
+	uv run python -m calliope
+
+sync:
+	uv sync
+
+lock:
+	uv lock
 
 docker-build:
 	docker build -t calliope .
 
 docker-run:
-	docker run --gpus all --runtime=nvidia calliope
+	docker run --gpus all --runtime=nvidia --env-file .env calliope
+
+up:
+	docker compose up -d --build
+
+down:
+	docker compose down

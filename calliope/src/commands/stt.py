@@ -5,7 +5,7 @@ import time
 
 import librosa
 from loguru import logger
-from moviepy.editor import VideoFileClip
+from moviepy import VideoFileClip
 from telegram import Update
 from telegram._files.videonote import VideoNote
 from telegram._files.voice import Voice
@@ -61,7 +61,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             audio = video.audio
 
             file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
-            audio.write_audiofile(file_audio_path, verbose=False, logger=None)
+            audio.write_audiofile(file_audio_path, logger=None)
 
             audio, sr = librosa.load(file_audio_path)
         elif message_type(update) == Voice:

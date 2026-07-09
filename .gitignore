@@ -163,6 +163,5 @@ stast.json
 *ipynb
 .DS_Store
 model/
-poetry.lock
 # Database backups
 backups/
