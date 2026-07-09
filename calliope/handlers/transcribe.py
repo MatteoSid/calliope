@@ -2,6 +2,7 @@ import asyncio
 import os
 import tempfile
 import time
+from datetime import timedelta
 
 import librosa
 from loguru import logger
@@ -27,9 +28,9 @@ whisper = WhisperInferenceModel()
 def message_type(update):
     """Ritorna il tipo di attachment del messaggio (Voice o VideoNote), altrimenti None."""
     attachment = update.effective_message.effective_attachment
-    if type(attachment) == Voice:
+    if isinstance(attachment, Voice):
         return Voice
-    elif type(attachment) == VideoNote:
+    elif isinstance(attachment, VideoNote):
         return VideoNote
     else:
         return None
@@ -51,7 +52,12 @@ async def _send_or_edit_with_retry(operation, *, max_attempts: int = 5):
                 f"Flood control, waiting {e.retry_after}s "
                 f"(attempt {attempt}/{max_attempts})"
             )
-            await asyncio.sleep(e.retry_after)
+            delay = (
+                e.retry_after.total_seconds()
+                if isinstance(e.retry_after, timedelta)
+                else float(e.retry_after)
+            )
+            await asyncio.sleep(delay)
     raise RuntimeError(f"Flood control: giving up after {max_attempts} attempts")
 
 
@@ -85,7 +91,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await new_file.download_to_drive(file_path)
             audio, sr = librosa.load(file_path)
 
-        logger.info("Audio loaded in {:.2f} seconds".format(time.time() - start_time))
+        logger.info(f"Audio loaded in {time.time() - start_time:.2f} seconds")
 
     # Pre-filtro: audio senza parlato → reaction 🔇, nessuna trascrizione né
     # aggiornamento delle statistiche.
@@ -111,7 +117,7 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             text="[...]",
             disable_notification=True,
         )
-        for x, segment in enumerate(segments):
+        for segment in segments:
             full_transcription += segment.text
             message_parts = split_message(
                 full_transcription, 4096 - 6
@@ -125,16 +131,18 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 # perdita di testo) e l'attesa non blocca l'event loop.
                 if i == 0:
                     await _send_or_edit_with_retry(
-                        lambda part=part: context.bot.edit_message_text(
-                            text=part,
-                            chat_id=current_message.chat_id,
-                            message_id=current_message.message_id,
+                        lambda part=part, cm=current_message: (
+                            context.bot.edit_message_text(
+                                text=part,
+                                chat_id=cm.chat_id,
+                                message_id=cm.message_id,
+                            )
                         )
                     )
                 else:
                     current_message = await _send_or_edit_with_retry(
-                        lambda part=part: context.bot.send_message(
-                            chat_id=current_message.chat_id,
+                        lambda part=part, cm=current_message: context.bot.send_message(
+                            chat_id=cm.chat_id,
                             text=part,
                             disable_notification=True,
                         )

@@ -13,7 +13,7 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | 0.2 Pulizia repo | ✅ | notebook in `notebooks/`, `CLAUDE.md` committato |
 | 1.1 Lockfile | ✅ | migrato a **uv**: `uv.lock` committato |
 | 1.2 Struttura package | ✅ | handlers/transcription/media/storage; entry point `calliope` |
-| 1.3 Tooling ruff/mypy | ⬜ | |
+| 1.3 Tooling ruff/mypy | ✅ | ruff+mypy+pre-commit verdi |
 | 1.4 Config pydantic-settings | ✅ | `calliope/settings.py` |
 | 1.5 Bootstrap esplicito | ⬜ | |
 | 2.1 Storage riscritto | ⬜ | |
@@ -129,16 +129,16 @@ calliope/
 *Parallelizzabile con 1.1; da fare dopo 1.2 per non lintare file che spariranno.*
 
 **Attività:**
-- [ ] Aggiungere a `pyproject.toml`: `ruff` (lint + format, regole: `E`, `F`, `I`, `B`, `UP`, `N`), `mypy` (inizialmente permissivo: `ignore_missing_imports`, poi stretto sui moduli nuovi), gruppo dev.
-- [ ] Configurare `pre-commit` con ruff + ruff-format + mypy.
-- [ ] Prima passata di pulizia guidata dal linter:
-  - [ ] rimuovere `from venv import logger` (C3, parte import),
-  - [ ] rimuovere import inutilizzati e i `except:` nudi,
-  - [ ] eliminare **solo il codice realmente morto** censito in §5b dell'analisi: `ConfigsNotFoundError`, blocco commentato `change_language` del modello, chiavi morte di `configs.yaml`, `title()`/figlet (togliere anche `figlet` dal Dockerfile),
-  - [ ] **parcheggiare le feature incompiute** (§5a dell'analisi) — `stats.py`, `admin_feature.py`, `detect_silence`, `format_timedelta` **non si eliminano**: si applicano i fix minimi per far passare linter e mypy (import mancanti, annotazioni di tipo) e si marcano con un commento che rimanda allo step dedicato (`/stats` → 2.6, silence detection → 2.7, modulo admin → 3.4).
-- [ ] Uniformare la lingua di codice/commenti/docstring (raccomandato: inglese).
+- [x] Aggiungere a `pyproject.toml`: `ruff` (regole `E`, `F`, `I`, `B`, `UP`, `N`; `E501` ignorata perché gestita dal formatter), `mypy` (permissivo: `ignore_missing_imports`, `disable_error_code` per gli accessi Optional di PTB), gruppo dev.
+- [x] Configurare `pre-commit` con ruff + ruff-format + mypy (`.pre-commit-config.yaml`).
+- [x] Prima passata di pulizia guidata dal linter:
+  - [x] `from venv import logger`, `ConfigsNotFoundError`, `configs.yaml`, blocco `change_language` commentato: già assenti da sessioni precedenti,
+  - [x] rimossi `except:` nudi (→ `except Exception`), `type(x) == …` (→ `isinstance`), f-string, loop var inutili, parentesi `lru_cache()`, import ordinati,
+  - [x] `title()`/figlet eliminati (già in 1.2, figlet tolto anche dal Dockerfile),
+  - [x] feature incompiute: **non pertinente**, sono già state completate nelle sessioni precedenti.
+- [~] Uniformare la lingua di codice/commenti/docstring: **rimandato** — i commenti restano in italiano (coerenti col progetto e con l'utente); solo *raccomandato* nella roadmap.
 
-**Criteri di accettazione:** `ruff check .` e `mypy calliope` passano; pre-commit installato; zero codice morto residuo; le feature incompiute compilano e sono rintracciabili dai commenti-segnaposto.
+**Criteri di accettazione:** `ruff check .` e `mypy calliope` passano; pre-commit installato e verde su `--all-files`. ✅
 
 ### Step 1.4 — Configurazione unificata con pydantic-settings (A6, A7, C9)
 

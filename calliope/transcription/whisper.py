@@ -74,7 +74,7 @@ class WhisperInferenceModel:
         )
 
         # Dizionario che accumula le parole per ciascun minuto
-        minute_segments = {}
+        minute_segments: dict[int, list[str]] = {}
         total_duration = 0.0
 
         for segment in segments:
@@ -106,8 +106,8 @@ class WhisperInferenceModel:
             end_interval = min((i + 1) * 60, total_duration)
 
             # Formattazione dei timestamp
-            start_ts = f"{int(start_interval//3600):02d}:{int((start_interval%3600)//60):02d}:{int(start_interval%60):02d}"
-            end_ts = f"{int(end_interval//3600):02d}:{int((end_interval%3600)//60):02d}:{int(end_interval%60):02d}"
+            start_ts = f"{int(start_interval // 3600):02d}:{int((start_interval % 3600) // 60):02d}:{int(start_interval % 60):02d}"
+            end_ts = f"{int(end_interval // 3600):02d}:{int((end_interval % 3600) // 60):02d}:{int(end_interval % 60):02d}"
 
             # Preleva le parole accumulate in questo minuto
             words = minute_segments.get(i, [])

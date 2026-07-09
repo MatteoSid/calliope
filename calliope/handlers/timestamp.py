@@ -8,10 +8,10 @@ from moviepy import VideoFileClip
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from calliope.settings import settings
-from calliope.transcription.whisper import WhisperInferenceModel
-from calliope.storage.mongo import calliope_db_init
 from calliope.media.silence import detect_silence
+from calliope.settings import settings
+from calliope.storage.mongo import calliope_db_init
+from calliope.transcription.whisper import WhisperInferenceModel
 
 whisper = WhisperInferenceModel()
 calliope_db = calliope_db_init()
@@ -21,7 +21,6 @@ async def timestamp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     logger.info(f"Request from: {update.message.from_user.username}")
     with tempfile.TemporaryDirectory() as temp_dir:
-
         try:
             file = await context.bot.get_file(update.effective_message.video.file_id)
         except telegram.error.BadRequest as e:

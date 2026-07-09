@@ -57,4 +57,4 @@ class Settings(BaseSettings):
         return v
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]  # i campi sono caricati dall'ambiente
