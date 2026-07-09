@@ -39,6 +39,15 @@ class UnsupportedMediaError(Exception):
     """Il messaggio non contiene un allegato audio/video gestito."""
 
 
+class MediaTooLongError(Exception):
+    """L'allegato supera la durata massima consentita (controllo pre-download)."""
+
+    def __init__(self, duration: int, limit: int) -> None:
+        self.duration = duration
+        self.limit = limit
+        super().__init__(f"Media too long: {duration}s > {limit}s")
+
+
 @dataclass
 class AudioData:
     """Audio decodificato e pronto per l'inferenza."""
@@ -102,15 +111,21 @@ async def _decode_to_pcm(source_path: str) -> np.ndarray:
     return np.frombuffer(stdout, dtype=np.float32).copy()
 
 
-async def download_audio(bot: Bot, message: Message) -> AudioData:
+async def download_audio(
+    bot: Bot, message: Message, max_duration_s: int | None = None
+) -> AudioData:
     """Scarica l'allegato di ``message`` e ne estrae l'audio.
 
     Gestisce voice, video_note e video restituendo sempre audio mono float32 a
-    16 kHz. Solleva ``UnsupportedMediaError`` se il messaggio non ha un allegato
-    gestito; propaga gli errori di Telegram (es. ``BadRequest`` per file troppo
-    grandi) e di ffmpeg al chiamante.
+    16 kHz. Se ``max_duration_s`` è impostato e la durata dichiarata lo supera,
+    solleva ``MediaTooLongError`` **prima** di scaricare il file (nessun download
+    sprecato). Solleva ``UnsupportedMediaError`` se il messaggio non ha un
+    allegato gestito; propaga gli errori di Telegram (es. ``BadRequest`` per file
+    troppo grandi) e di ffmpeg al chiamante.
     """
     file_id, duration = _extract_attachment(message)
+    if max_duration_s is not None and duration > max_duration_s:
+        raise MediaTooLongError(duration, max_duration_s)
     telegram_file = await bot.get_file(file_id)
 
     with tempfile.TemporaryDirectory() as temp_dir:

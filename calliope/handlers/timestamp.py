@@ -1,13 +1,13 @@
 import asyncio
 import io
 
-import telegram
 from loguru import logger
 from telegram import Update
 from telegram.constants import ChatAction
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
-from calliope.media.extract import download_audio
+from calliope.media.extract import MediaTooLongError, download_audio
 from calliope.media.silence import detect_silence
 from calliope.settings import settings
 
@@ -22,13 +22,26 @@ async def timestamp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if message is None:
         return
 
-    # Download + estrazione audio unificati (video via ffmpeg): niente moviepy,
-    # nessun file intermedio, audio già mono 16 kHz.
+    # Allowlist: se configurata, solo le chat abilitate possono usare il bot.
+    if not settings.chat_allowed(message.chat_id):
+        logger.info(f"Chat {message.chat_id} not in allowlist, ignoring")
+        await message.reply_text("🔒 This Calliope instance is private.")
+        return
+
+    # Download + estrazione audio (video via ffmpeg). Limite di durata verificato
+    # prima del download; niente str(e) esposto all'utente.
     try:
-        audio_data = await download_audio(context.bot, message)
-    except telegram.error.BadRequest as e:
-        logger.error(str(e))
-        await update.message.reply_text(str(e))
+        audio_data = await download_audio(
+            context.bot, message, max_duration_s=settings.max_media_duration_s
+        )
+    except MediaTooLongError as e:
+        await message.reply_text(
+            f"⏱ This video is too long ({e.duration}s). The limit is {e.limit}s."
+        )
+        return
+    except BadRequest:
+        logger.warning(f"Could not download video from chat {message.chat_id}")
+        await message.reply_text("Couldn't download this video (is it too large?).")
         return
 
     # Pre-filtro: video senza parlato → reaction 🔇, nessuna trascrizione.

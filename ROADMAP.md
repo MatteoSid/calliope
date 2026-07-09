@@ -25,7 +25,7 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | 2.7 Silence detection | ✅ | reaction 🔇 |
 | 3.1 Inferenza off-loop | ✅ | executor dedicato, concurrent_updates |
 | 3.2 Streaming redesign | ✅ | `transcription/streaming.py`, edit a intervalli |
-| 3.3 Limiti d'uso | ⬜ | |
+| 3.3 Limiti d'uso | ✅ | durata max pre-download, allowlist, error handler globale |
 | 3.4 Modulo admin | ✅ | |
 | 3.5 Graceful shutdown | ⬜ | |
 | 4.1 Hardening Docker | ⬜ | parziale (base uv/cuDNN9) |
@@ -314,11 +314,11 @@ calliope/
 ### Step 3.3 — Limiti d'uso e messaggi d'errore (S2, S5)
 
 **Attività:**
-- [ ] Controllo `duration > settings.max_media_duration_s` **prima** di scaricare il file → risposta cortese con il limite.
-- [ ] Opzionale: `allowed_chat_ids` in Settings (vuoto = bot pubblico) per chi self-hosta con GPU propria.
-- [ ] Handler di errore globale (`application.add_error_handler`): all'utente un messaggio generico ("Qualcosa è andato storto, riprova"), nei log l'eccezione completa; eliminare tutti i `reply_text(str(e))`. L'aggancio alle notifiche admin arriva nello step 3.4.
+- [x] Controllo durata **prima** del download: `download_audio(..., max_duration_s=settings.max_media_duration_s)` solleva `MediaTooLongError` (durata + limite) prima di `bot.get_file`; gli handler rispondono con un messaggio cortese col limite.
+- [x] `allowed_chat_ids` in `Settings` (lista di interi, parsing comma-separated via `NoDecode`; vuoto = bot pubblico) + metodo `chat_allowed(chat_id)`; gli handler media ignorano/rifiutano cortesemente le chat non in allowlist. Documentata in `.env.example`.
+- [x] Error handler globale già presente (`error_handler`, aggiunto in 3.4): log completo dell'eccezione, notifica all'owner, messaggio generico all'utente. Rimossi i `reply_text(str(e))` (in `timestamp.py`) e il try/except locale duplicato in `stt`: gli errori imprevisti dell'inferenza propagano ora all'handler globale; i `BadRequest` di download sono gestiti con messaggio cortese (niente dettagli tecnici).
 
-**Criteri di accettazione:** un video oltre il limite viene rifiutato senza download; un'eccezione forzata produce messaggio generico all'utente + stack trace nei log.
+**Criteri di accettazione:** un media oltre il limite viene rifiutato senza download (verificato: `get_file` non chiamato); un'eccezione forzata produce messaggio generico all'utente + stack trace nei log (via error handler globale). ✅
 
 ### Step 3.4 — Modulo admin per l'owner (S4)
 

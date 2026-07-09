@@ -4,11 +4,12 @@ import time
 from loguru import logger
 from telegram import Update
 from telegram.constants import ChatAction
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
-from calliope.media.extract import download_audio
+from calliope.media.extract import MediaTooLongError, download_audio
 from calliope.media.silence import detect_silence
-from calliope.notifier import notify_error, notify_registration
+from calliope.notifier import notify_registration
 from calliope.settings import settings
 from calliope.transcription.streaming import TranscriptionStreamer
 
@@ -23,10 +24,29 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if message is None:
         return
 
-    # Download + estrazione audio unificati (voice/video_note via ffmpeg): un
-    # solo percorso, nessun leak di risorse, audio già mono 16 kHz.
+    # Allowlist: se configurata, solo le chat abilitate possono usare il bot.
+    if not settings.chat_allowed(message.chat_id):
+        logger.info(f"Chat {message.chat_id} not in allowlist, ignoring")
+        await message.reply_text("🔒 This Calliope instance is private.")
+        return
+
+    # Download + estrazione audio (voice/video_note via ffmpeg). Il limite di
+    # durata è verificato PRIMA del download: media troppo lunghi sono rifiutati
+    # senza scaricare nulla.
     start_time = time.time()
-    audio_data = await download_audio(context.bot, message)
+    try:
+        audio_data = await download_audio(
+            context.bot, message, max_duration_s=settings.max_media_duration_s
+        )
+    except MediaTooLongError as e:
+        await message.reply_text(
+            f"⏱ This message is too long ({e.duration}s). The limit is {e.limit}s."
+        )
+        return
+    except BadRequest:
+        logger.warning(f"Could not download media from chat {message.chat_id}")
+        await message.reply_text("Couldn't download this message (is it too large?).")
+        return
     duration = audio_data.duration
     logger.info(f"Audio loaded in {time.time() - start_time:.2f} seconds")
 
@@ -47,28 +67,22 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if registration:
         await notify_registration(context.bot, registration, update)
 
-    try:
-        start_time = time.time()
-        language = storage.get_language(update) or settings.default_language
+    # Streaming a intervalli: il placeholder compare subito, poi il messaggio
+    # viene aggiornato man mano (non a ogni segmento) → chiamate API lineari.
+    # Gli errori imprevisti dell'inferenza propagano all'error handler globale
+    # (messaggio generico all'utente + notifica all'owner).
+    start_time = time.time()
+    language = storage.get_language(update) or settings.default_language
+    await context.bot.send_chat_action(message.chat_id, ChatAction.TYPING)
+    streamer = TranscriptionStreamer(message)
+    await streamer.start()
+    async for text in transcriber.stream_segments(
+        audio_data.samples, language=language
+    ):
+        await streamer.add(text)
+    await streamer.finish()
 
-        # Streaming a intervalli: il placeholder compare subito, poi il messaggio
-        # viene aggiornato man mano (non a ogni segmento) → chiamate API lineari
-        # e prevedibili, niente flood control nei casi d'uso normali.
-        await context.bot.send_chat_action(message.chat_id, ChatAction.TYPING)
-        streamer = TranscriptionStreamer(message)
-        await streamer.start()
-        async for text in transcriber.stream_segments(
-            audio_data.samples, language=language
-        ):
-            await streamer.add(text)
-        await streamer.finish()
-
-        logger.success(
-            f"{update.message.from_user.username}: "
-            f"{len(streamer.text)} chars in {round(time.time() - start_time, 2)}s"
-        )
-
-    except Exception as e:
-        logger.exception(e)
-        await notify_error(context.bot, update, e)
-        await update.message.reply_text("Something went wrong, please try again.")
+    logger.success(
+        f"{update.message.from_user.username}: "
+        f"{len(streamer.text)} chars in {round(time.time() - start_time, 2)}s"
+    )
