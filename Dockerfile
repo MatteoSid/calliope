@@ -14,7 +14,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     UV_LINK_MODE=copy
 
 # Dipendenze di sistema audio/video:
-# libsndfile1: librosa; ffmpeg: moviepy/av.
+# libsndfile1: librosa; ffmpeg: estrazione audio (media/extract.py) + av.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \

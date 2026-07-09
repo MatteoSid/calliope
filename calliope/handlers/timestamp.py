@@ -1,13 +1,11 @@
-import os
-import tempfile
+import io
 
-import librosa
 import telegram
 from loguru import logger
-from moviepy import VideoFileClip
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from calliope.media.extract import download_audio
 from calliope.media.silence import detect_silence
 from calliope.settings import settings
 
@@ -18,43 +16,36 @@ async def timestamp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     storage = context.bot_data["storage"]
     transcriber = context.bot_data["transcriber"]
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        try:
-            file = await context.bot.get_file(update.effective_message.video.file_id)
-        except telegram.error.BadRequest as e:
-            logger.error(str(e))
-            await update.message.reply_text(str(e))
-            return
-        file_video_path = os.path.join(temp_dir, "temp_video.mp4")
-        await file.download_to_drive(file_video_path)
-        video = VideoFileClip(file_video_path)
-        audio = video.audio
+    message = update.effective_message
+    if message is None:
+        return
 
-        file_audio_path = os.path.join(temp_dir, "temp_audio.ogg")
-        audio.write_audiofile(file_audio_path, logger=None)
-
-        audio, sr = librosa.load(file_audio_path)
+    # Download + estrazione audio unificati (video via ffmpeg): niente moviepy,
+    # nessun file intermedio, audio già mono 16 kHz.
+    try:
+        audio_data = await download_audio(context.bot, message)
+    except telegram.error.BadRequest as e:
+        logger.error(str(e))
+        await update.message.reply_text(str(e))
+        return
 
     # Pre-filtro: video senza parlato → reaction 🔇, nessuna trascrizione.
-    if detect_silence(audio, sr):
+    if detect_silence(audio_data.samples, audio_data.sample_rate):
         logger.info(
             f"{update.message.from_user.username}: silent video, skipping transcription"
         )
         await update.message.set_reaction("🔇")
         return
 
-    # Chiama il metodo che lavora direttamente con audio e sample rate
+    # Trascrizione con timestamp direttamente dall'array audio.
     language = storage.get_language(update) or settings.default_language
-    result_str = transcriber.transcribe_with_timestamps(audio, language=language)
+    result_str = transcriber.transcribe_with_timestamps(
+        audio_data.samples, language=language
+    )
 
-    # Scriviamo il risultato in un file di testo
-    with tempfile.TemporaryDirectory() as temp_dir:
-        transcript_path = os.path.join(temp_dir, "trascrizione.txt")
-        with open(transcript_path, "w", encoding="utf-8") as f:
-            f.write(result_str)
-
-        # Inviamo il file .txt di trascrizione all'utente
-        await update.message.reply_document(
-            document=open(transcript_path, "rb"), filename="trascrizione.txt"
-        )
+    # Inviamo il risultato come file .txt costruito in memoria (nessun file
+    # temporaneo su disco).
+    document = io.BytesIO(result_str.encode("utf-8"))
+    document.name = "trascrizione.txt"
+    await update.message.reply_document(document=document, filename="trascrizione.txt")
     logger.success("Trascrizione completata")

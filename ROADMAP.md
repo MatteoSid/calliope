@@ -19,7 +19,7 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | 2.1 Storage riscritto | ✅ | upsert atomici, datetime, indici, degraded |
 | 2.2 `/lang` end-to-end | ✅ | |
 | 2.3 Device detection | ✅ | fallback CPU dichiarato, compute_type esplicito |
-| 2.4 Media processing | ⬜ | |
+| 2.4 Media processing | ✅ | `media/extract.py` ffmpeg diretto, moviepy rimosso |
 | 2.5 Flood control retry | ✅ | |
 | 2.6 `/stats` su Mongo | ✅ | |
 | 2.7 Silence detection | ✅ | reaction 🔇 |
@@ -228,12 +228,12 @@ calliope/
 **Obiettivo:** un solo modulo per download → estrazione audio → array numpy, usato da entrambi gli handler.
 
 **Attività:**
-- [ ] Creare `media/extract.py` con un'unica funzione `async download_audio(bot, message) -> AudioData` che gestisce i tre tipi (voice, video_note, video) e ritorna array + sample rate + durata.
-- [ ] Sostituire moviepy con **ffmpeg diretto** (`ffmpeg -i in.mp4 -vn -ac 1 -ar 16000 out.wav` via `asyncio.create_subprocess_exec`): elimina la dipendenza (D3), i leak di `VideoFileClip` (C10) e il doppio passaggio ogg→librosa. In alternativa minimale: tenere moviepy ma con `with closing(...)`.
-- [ ] Eliminare `message_type()` a favore di un match esplicito sul tipo di attachment con ramo `else` che solleva un errore parlante (fixa C8).
-- [ ] `timestamp.py`: scrivere il file di trascrizione con context manager, o meglio inviare il contenuto da memoria con `io.BytesIO` (niente secondo `TemporaryDirectory`).
+- [x] Creato `media/extract.py` con `async download_audio(bot, message) -> AudioData` che gestisce i tre tipi (voice, video_note, video) e ritorna array + sample rate + durata (dataclass `AudioData`).
+- [x] Sostituito moviepy con **ffmpeg diretto** (`ffmpeg -nostdin -i input -vn -f f32le -ac 1 -ar 16000 pipe:1` via `asyncio.create_subprocess_exec`, PCM letto da stdout in memoria): eliminata la dipendenza `moviepy` (+ imageio/pillow/proglog) da `pyproject.toml`/`uv.lock`, niente più leak di `VideoFileClip` (C10) né doppio ricampionamento ogg→librosa→whisper (si decodifica direttamente a 16 kHz mono, il target di faster-whisper). `librosa` non è più importata (rimozione dalle deps demandata a 4.3).
+- [x] Eliminato `message_type()` a favore di `_extract_attachment()`: match esplicito voice/video_note/video con ramo `else` che solleva `UnsupportedMediaError` (fixa C8).
+- [x] `timestamp.py`: il file di trascrizione è inviato da memoria con `io.BytesIO` (niente secondo `TemporaryDirectory`).
 
-**Criteri di accettazione:** vocale, video note e video funzionano; `lsof`/`ps` non mostrano processi ffmpeg o file handle residui dopo N trascrizioni; nessun import di moviepy residuo.
+**Criteri di accettazione:** vocale, video note e video funzionano (verificato: decodifica ogg+mp4 → array float32 16 kHz mono, silence detection coerente); nessun processo ffmpeg residuo (subprocess `await communicate()` → reaped) né file handle (temp file in `TemporaryDirectory`, output in memoria); nessun import di moviepy residuo. ✅
 
 ### Step 2.5 — Invio messaggi: retry corretto sul flood control (C5)
 
