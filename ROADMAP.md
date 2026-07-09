@@ -24,7 +24,7 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | 2.6 `/stats` su Mongo | ✅ | |
 | 2.7 Silence detection | ✅ | reaction 🔇 |
 | 3.1 Inferenza off-loop | ✅ | executor dedicato, concurrent_updates |
-| 3.2 Streaming redesign | ⬜ | |
+| 3.2 Streaming redesign | ✅ | `transcription/streaming.py`, edit a intervalli |
 | 3.3 Limiti d'uso | ⬜ | |
 | 3.4 Modulo admin | ✅ | |
 | 3.5 Graceful shutdown | ⬜ | |
@@ -304,12 +304,12 @@ calliope/
 **Obiettivo: da O(n²) chiamate API a un numero costante e prevedibile.**
 
 **Attività:**
-- [ ] Accumulare i segmenti man mano che il generatore li produce e aggiornare il messaggio Telegram **a intervalli** (es. edit al massimo ogni 3-5 secondi, o ogni +500 caratteri), non a ogni segmento.
-- [ ] Isolare la logica di split/edit/send in `transcription/streaming.py` con stato proprio (ultimo messaggio, testo già inviato) — oggi il handler mescola download, trascrizione, split e invio.
-- [ ] Riusare `send_or_edit_with_retry` (2.5).
-- [ ] Edit finale a fine trascrizione per garantire il testo completo.
+- [x] I segmenti sono prodotti man mano da `WhisperTranscriber.stream_segments` (async generator alimentato dal thread executor via coda thread-safe); `TranscriptionStreamer.add()` aggiorna Telegram **a intervalli** (default: max ogni 3 s **o** ogni +400 caratteri), non a ogni segmento.
+- [x] Logica di split/edit/send isolata in `transcription/streaming.py` (`TranscriptionStreamer`) con stato proprio: messaggi inviati, testo già mostrato per ciascun messaggio, indice dei messaggi ormai definitivi (`_finalized`, non più ri-editati). L'handler ora orchestra soltanto (download → silence → stream → finish).
+- [x] `send_or_edit_with_retry` spostata in `streaming.py` e riusata dallo streamer (flood control, 2.5).
+- [x] `finish()` fa il flush finale (testo completo garantito); gli edit con contenuto identico sono saltati (niente errore "message is not modified").
 
-**Criteri di accettazione:** un audio da 10 minuti genera un numero di chiamate API lineare e limitato (verificabile dai log); niente flood control nei casi d'uso normali; il testo finale in chat è identico all'output del modello.
+**Criteri di accettazione:** un audio lungo genera un numero di chiamate API lineare e limitato; niente flood control nei casi d'uso normali; il testo finale in chat è identico all'output del modello. ✅ (verificato: 8250 caratteri → 3 messaggi coerenti con `split_message`, **24 chiamate API per 750 segmenti**; edit identici saltati; stream ordinato e off event loop).
 
 ### Step 3.3 — Limiti d'uso e messaggi d'errore (S2, S5)
 

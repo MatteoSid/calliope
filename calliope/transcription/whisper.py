@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
 
 import ctranslate2
@@ -7,6 +8,9 @@ from faster_whisper import WhisperModel
 from loguru import logger
 
 from calliope.settings import Settings
+
+# Sentinella: il thread produttore segnala la fine dello stream dei segmenti.
+_STREAM_DONE = object()
 
 
 class WhisperTranscriber:
@@ -63,28 +67,47 @@ class WhisperTranscriber:
             return settings.whisper_compute_type
         return "float16" if device == "cuda" else "int8"
 
-    async def transcribe(self, file_audio, language: str | None = None) -> list:
-        """Trascrive l'audio (fuori dall'event loop) e ne ritorna i segmenti.
+    async def stream_segments(
+        self, file_audio, language: str | None = None
+    ) -> AsyncIterator[str]:
+        """Trascrive l'audio producendo i testi dei segmenti man mano.
+
+        L'inferenza (bloccante) gira nel thread executor; ogni segmento prodotto
+        dal generatore lazy di faster-whisper viene inoltrato all'event loop via
+        una coda thread-safe. Il consumer può così aggiornare Telegram in tempo
+        reale senza che l'event loop venga mai bloccato.
 
         Args:
             file_audio: array/percorso audio accettato da faster-whisper.
-            language: codice lingua ISO (es. ``"it"``) per forzare la lingua;
-                ``None`` lascia l'auto-detect al modello.
+            language: codice lingua ISO (es. ``"it"``); ``None`` = auto-detect.
 
-        Returns:
-            La lista completa dei segmenti (il generatore lazy è già consumato
-            nel thread executor).
+        Yields:
+            Il testo di ciascun segmento, nell'ordine di produzione.
         """
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            self._executor, self._transcribe, file_audio, language
-        )
+        queue: asyncio.Queue = asyncio.Queue()
 
-    def _transcribe(self, file_audio, language: str | None) -> list:
-        """Corpo sincrono eseguito nel thread executor."""
-        segments, _info = self.model.transcribe(file_audio, language=language)
-        # Il generatore è lazy: consumarlo qui, nel thread, non nell'event loop.
-        return list(segments)
+        def _produce() -> None:
+            try:
+                segments, _info = self.model.transcribe(file_audio, language=language)
+                for segment in segments:
+                    loop.call_soon_threadsafe(queue.put_nowait, segment.text)
+            except Exception as exc:  # inoltra l'errore al consumer
+                loop.call_soon_threadsafe(queue.put_nowait, exc)
+            else:
+                loop.call_soon_threadsafe(queue.put_nowait, _STREAM_DONE)
+
+        future = loop.run_in_executor(self._executor, _produce)
+        try:
+            while True:
+                item = await queue.get()
+                if item is _STREAM_DONE:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+        finally:
+            await future  # assicura il completamento del thread produttore
 
     async def transcribe_with_timestamps(
         self,
