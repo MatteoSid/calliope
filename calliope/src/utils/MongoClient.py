@@ -74,7 +74,10 @@ class MongoWriter:
             "times_used": 0,
             "last_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "total_speech_time": 0,
-            "language_code": update.message.from_user.language_code,
+            # Lingua di trascrizione: None = auto-detect finché l'utente non
+            # sceglie esplicitamente con /lang. La lingua del client Telegram
+            # non viene forzata sulla trascrizione.
+            "language_code": None,
         }
 
         return new_user
@@ -93,7 +96,8 @@ class MongoWriter:
                 "first_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "times_used": 0,
                 "last_use": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "language_code": update.effective_user.language_code,
+                # None = auto-detect finché non si usa /lang nel gruppo.
+                "language_code": None,
                 "members_stats": [self.create_new_user(update)],
             }
             self.groups_collection.insert_one(new_group)
@@ -155,18 +159,31 @@ class MongoWriter:
                 array_filters=[{"elem.user_id": str(update.message.from_user.id)}],
             )
 
-    def get_language(self, update):
-        if str(update.message.chat.type) == "private":
-            language = self.users_collection.find_one(
-                {"user_id": str(update.message.from_user.id)}
-            )
+    def get_language(self, update) -> str | None:
+        """Restituisce la lingua di trascrizione impostata per la chat.
 
-        elif str(update.message.chat.type) in ["group", "supergroup"]:
-            language = self.groups_collection.find_one(
-                {"group_id": str(update.message.chat.id)}
-            )
+        Ritorna il codice lingua salvato oppure ``None`` (nessuna scelta
+        esplicita → auto-detect). Non solleva eccezioni se il documento non
+        esiste o il tipo di chat non è gestito.
+        """
+        try:
+            if str(update.message.chat.type) == "private":
+                document = self.users_collection.find_one(
+                    {"user_id": str(update.message.from_user.id)}
+                )
+            elif str(update.message.chat.type) in ["group", "supergroup"]:
+                document = self.groups_collection.find_one(
+                    {"group_id": str(update.message.chat.id)}
+                )
+            else:
+                return None
+        except Exception as e:
+            logger.error(f"Error reading language: {e}")
+            return None
 
-        return language["language_code"] or "en"
+        if not document:
+            return None
+        return document.get("language_code")
 
     def change_language(self, update, language):
         try:
@@ -174,11 +191,14 @@ class MongoWriter:
                 self.users_collection.update_one(
                     filter={"user_id": str(update.message.from_user.id)},
                     update={"$set": {"language_code": language}},
+                    upsert=True,
                 )
             elif str(update.message.chat.type) in ["group", "supergroup"]:
                 self.groups_collection.update_one(
                     filter={"group_id": str(update.message.chat.id)},
                     update={"$set": {"language_code": language}},
+                    upsert=True,
                 )
         except Exception as e:
             logger.error(f"Error changing language: {e}")
+            raise

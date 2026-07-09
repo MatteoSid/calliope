@@ -33,21 +33,23 @@ class WhisperInferenceModel:
         self.model = WhisperModel(
             self.model_name, device=self.device, device_index=settings.device_index
         )
-        self.language = settings.default_language
 
-    def transcribe(self, file_audio):
-        segments, info = self.model.transcribe(file_audio)
+    def transcribe(self, file_audio, language: str | None = None):
+        """Trascrive l'audio.
+
+        Args:
+            file_audio: array/percorso audio accettato da faster-whisper.
+            language: codice lingua ISO (es. ``"it"``) per forzare la lingua;
+                ``None`` lascia l'auto-detect al modello.
+        """
+        segments, info = self.model.transcribe(file_audio, language=language)
         return segments
 
-    # #TODO: coming soon
-    # def change_language(self, language):
-    #     self.model.config.forced_decoder_ids = self.processor.get_decoder_prompt_ids(
-    #         language=language,
-    #         task="transcribe",
-    #     )
-
     def transcribe_with_timestamps(
-        self, audio_data: np.ndarray, return_dict: bool = False
+        self,
+        audio_data: np.ndarray,
+        return_dict: bool = False,
+        language: str | None = None,
     ):
         """
         Trascrive il contenuto di 'audio_data' (già caricato in memoria) e restituisce il testo
@@ -67,7 +69,9 @@ class WhisperInferenceModel:
             audio_data = audio_data.astype(np.float32)
 
         # Esegui la trascrizione con timestamp a livello di parola
-        segments, info = self.model.transcribe(audio=audio_data, word_timestamps=True)
+        segments, info = self.model.transcribe(
+            audio=audio_data, word_timestamps=True, language=language
+        )
 
         # Dizionario che accumula le parole per ciascun minuto
         minute_segments = {}

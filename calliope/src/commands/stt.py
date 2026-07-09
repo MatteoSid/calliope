@@ -11,6 +11,7 @@ from telegram._files.voice import Voice
 from telegram.error import RetryAfter
 from telegram.ext import ContextTypes
 
+from calliope.settings import settings
 from calliope.src.models.inference_model import WhisperInferenceModel
 from calliope.src.utils.MongoClient import calliope_db_init
 from calliope.src.utils.utils import message_type, split_message
@@ -56,7 +57,8 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         start_time = time.time()
-        segments = whisper.transcribe(audio)
+        language = calliope_db.get_language(update) or settings.default_language
+        segments = whisper.transcribe(audio, language=language)
         full_transcription = ""
 
         current_message = await update.message.reply_text(
