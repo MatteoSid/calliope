@@ -52,8 +52,11 @@ class Settings(BaseSettings):
     # da virgola). NoDecode evita il parsing JSON automatico di pydantic-settings.
     allowed_chat_ids: Annotated[list[int], NoDecode] = []
     log_level: str = "INFO"
+    # Percorso di un file di log opzionale (oltre a stdout). Se impostato, il
+    # sink file ruota ogni giorno con retention 14 giorni e compressione zip.
+    log_file: str | None = None
 
-    @field_validator("admin_chat_id", "default_language", mode="before")
+    @field_validator("admin_chat_id", "default_language", "log_file", mode="before")
     @classmethod
     def _empty_str_to_none(cls, v: object) -> object:
         """Tratta una variabile opzionale lasciata vuota (es. ``ADMIN_CHAT_ID=``)

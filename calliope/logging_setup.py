@@ -13,10 +13,13 @@ LOG_FORMAT = (
 
 
 def setup_logging(settings: Settings) -> None:
-    """Configura loguru con un sink su stdout (catturato da Docker).
+    """Configura loguru: sink su stdout (catturato da Docker) e, se configurato,
+    un sink su file con rotation.
 
-    Sostituisce il fragile ``logger.remove(0)`` con ``logger.remove()``. La
-    rotation/retention su file e l'audit di privacy sono nello step 4.2.
+    I log non contengono testo di trascrizione né contenuto dei messaggi (solo
+    metadati: user/chat id, durata, tempi, esito, lingua) — audit di privacy
+    dello step 4.2. Se ``settings.log_file`` è impostato, si aggiunge un sink
+    file che ruota ogni giorno, conserva 14 giorni e comprime in zip.
     """
     logger.remove()
     logger.add(
@@ -25,3 +28,14 @@ def setup_logging(settings: Settings) -> None:
         level=settings.log_level.upper(),
         colorize=True,
     )
+    if settings.log_file:
+        logger.add(
+            settings.log_file,
+            format=LOG_FORMAT,
+            level=settings.log_level.upper(),
+            colorize=False,
+            rotation="1 day",
+            retention="14 days",
+            compression="zip",
+            enqueue=True,  # scritture non bloccanti dall'event loop
+        )
