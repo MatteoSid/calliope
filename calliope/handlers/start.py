@@ -3,16 +3,14 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from calliope.notifier import notify_registration
-from calliope.storage.mongo import calliope_db_init
-
-calliope_db = calliope_db_init()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
     logger.info(f"{update.message.from_user.username}: Start command")
 
-    created = calliope_db.add_user(update)
+    storage = context.bot_data["storage"]
+    created = storage.add_user(update)
     if created:
         await notify_registration(context.bot, "user", update)
 

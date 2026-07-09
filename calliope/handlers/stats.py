@@ -4,10 +4,7 @@ from loguru import logger
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from calliope.storage.mongo import calliope_db_init
 from calliope.transcription.formatting import format_timedelta
-
-calliope_db = calliope_db_init()
 
 
 def _display_name(member: dict) -> str:
@@ -26,10 +23,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     parlato trascritto.
     """
     logger.info(f"{update.message.from_user.username}: Stats command")
+    storage = context.bot_data["storage"]
     chat_type = str(update.message.chat.type)
 
     if chat_type == "private":
-        document = calliope_db.get_user_stats(update)
+        document = storage.get_user_stats(update)
         if not document or not document.get("times_used"):
             await update.message.reply_text(
                 "You haven't used Calliope yet. Send me a voice or video "
@@ -49,7 +47,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if chat_type in ("group", "supergroup"):
-        document = calliope_db.get_group_stats(update)
+        document = storage.get_group_stats(update)
         members = document.get("members_stats", []) if document else []
         if not document or not members:
             await update.message.reply_text(

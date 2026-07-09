@@ -3,10 +3,6 @@ from loguru import logger
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from calliope.storage.mongo import calliope_db_init
-
-calliope_db = calliope_db_init()
-
 # Codici lingua supportati da faster-whisper (ISO 639-1, es. "it", "en", "es").
 SUPPORTED_LANGUAGES = set(_LANGUAGE_CODES)
 
@@ -17,15 +13,16 @@ async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     - ``/lang`` senza argomenti mostra la lingua attualmente impostata.
     - ``/lang <codice>`` valida il codice contro le lingue supportate da
       faster-whisper e lo salva; alla trascrizione successiva la lingua viene
-      forzata (vedi ``WhisperInferenceModel.transcribe``).
+      forzata (vedi ``WhisperTranscriber.transcribe``).
     - ``/lang auto`` ripristina l'auto-detect.
     """
+    storage = context.bot_data["storage"]
     username = update.message.from_user.username or update.message.from_user.id
     args = context.args if context.args is not None else update.message.text.split()[1:]
 
     # /lang senza argomenti → mostra la lingua corrente
     if not args:
-        current = calliope_db.get_language(update)
+        current = storage.get_language(update)
         if current:
             await update.message.reply_text(
                 f"Current transcription language: {current}\n"
@@ -62,7 +59,7 @@ async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # Persistenza: separa l'errore DB dagli altri casi.
     try:
-        calliope_db.change_language(update=update, language=language)
+        storage.change_language(update=update, language=language)
     except Exception:
         await update.message.reply_text(
             "Could not save your language preference right now, please try again later.",
