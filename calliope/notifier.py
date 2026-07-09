@@ -49,7 +49,7 @@ async def notify_registration(bot: Bot, kind: str, update: Update) -> None:
     await notify_admin(bot, text)
 
 
-async def notify_error(bot: Bot, update: object, error: BaseException) -> None:
+async def notify_error(bot: Bot, update: object, error: BaseException | None) -> None:
     """Inoltra all'owner un riassunto dell'eccezione, con la chat anonimizzata."""
     if settings.admin_chat_id is None:
         return

@@ -7,13 +7,14 @@ from loguru import logger
 from calliope.settings import settings
 
 
-@lru_cache()
+@lru_cache
 def calliope_db_init():
     return MongoWriter()
 
 
 class MongoWriter:
     def __init__(self) -> None:
+        self.client: pymongo.MongoClient | None = None
         try:
             self.client = pymongo.MongoClient(settings.mongo_uri)
             self.client.server_info()  # Check connection
@@ -26,7 +27,7 @@ class MongoWriter:
             self.groups_collection = self.db[settings.mongo_groups_collection]
 
             logger.info(f"Connected to MongoDB at {settings.mongo_uri}")
-        except:
+        except Exception:
             self.client = None
             logger.error(f"Failed to connect to MongoDB at {settings.mongo_uri}")
 
@@ -276,7 +277,14 @@ class MongoWriter:
             )
             group_agg = list(
                 self.groups_collection.aggregate(
-                    [{"$group": {"_id": None, "transcriptions": {"$sum": "$times_used"}}}]
+                    [
+                        {
+                            "$group": {
+                                "_id": None,
+                                "transcriptions": {"$sum": "$times_used"},
+                            }
+                        }
+                    ]
                 )
             )
             member_agg = list(

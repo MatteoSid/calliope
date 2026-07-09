@@ -73,8 +73,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         for position, member in enumerate(ranking, start=1):
             speech_time = timedelta(seconds=member.get("total_speech_time", 0))
             lines.append(
-                f"{position}. {_display_name(member)}: "
-                f"{format_timedelta(speech_time)}"
+                f"{position}. {_display_name(member)}: {format_timedelta(speech_time)}"
             )
         await update.message.reply_text("\n".join(lines))
         return

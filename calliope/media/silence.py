@@ -5,7 +5,7 @@ import numpy as np
 from calliope.settings import settings
 
 
-def detect_silence(audio: np.ndarray, sr: int, threshold: int | None = None) -> bool:
+def detect_silence(audio: np.ndarray, sr: float, threshold: int | None = None) -> bool:
     """Determina se l'audio è (essenzialmente) muto, cioè non contiene parlato.
 
     Scandisce l'**intero** audio in finestre da 1 secondo e ne calcola l'energia
