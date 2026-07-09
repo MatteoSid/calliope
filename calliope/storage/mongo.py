@@ -46,6 +46,12 @@ class MongoStorage:
         except Exception as e:
             logger.warning(f"Could not create unique indexes: {e}")
 
+    def close(self) -> None:
+        """Chiude il client MongoDB (usato nel graceful shutdown, step 3.5)."""
+        if self.client is not None:
+            self.client.close()
+            logger.info("MongoDB client closed")
+
     # ------------------------------------------------------------------ helpers
     @staticmethod
     def _new_member(update) -> dict:
