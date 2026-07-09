@@ -33,7 +33,7 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | 4.3 Dipendenze | ✅ | aggiornate + potate via uv |
 | 4.4 Test automatici | ✅ | pytest+mongomock, 56 test verdi, regressioni C1/C2/C5/C7/C9 |
 | 4.5 CI | ⬜ | rimandato (richiesta owner) |
-| 4.6 Documentazione | ⬜ | |
+| 4.6 Documentazione | ✅ | README self-host completo, badge licenza corretto, analisi chiusa |
 
 ## Come usare questo documento
 
@@ -421,12 +421,14 @@ calliope/
 ### Step 4.6 — Documentazione finale (§6)
 
 **Attività:**
-- [ ] Riscrivere il README: fix typo, path screenshot con `/`, sezione Requirements aggiornata (CPU ora supportata — da 2.3), tabella variabili d'ambiente, sezione sviluppo (setup poetry, pre-commit, test), sezione limiti configurabili.
-- [ ] Badge licenza corretto (oggi punta a un repo altrui).
-- [ ] Aggiornare/chiudere questo documento e ANALISI_REFACTOR.md (spuntare le problematiche risolte).
-- [ ] Tag `v1.0.0`.
+- [x] Riscritto il README: fix typo ("mesage"/"runnig"), path screenshot con `/`, sezione Requirements aggiornata (CPU supportata via `DEVICE=auto`/fallback — da 2.3), tabella completa delle variabili d'ambiente, sezione Commands, sezione sviluppo (setup **uv**, pre-commit, test), sezione limiti configurabili (`MAX_MEDIA_DURATION_S`, `ALLOWED_CHAT_IDS`). Aggiunto target `test` al `makefile` per allinearlo al README.
+- [x] Badge licenza corretto: ora punta a `github.com/MatteoSid/calliope/blob/main/LICENSE` (prima puntava a un repo altrui).
+- [x] Chiuso ANALISI_REFACTOR.md: banner "refactor completato (v1.0.0)" + tabella "Stato di risoluzione" con ogni ID → step/esito (solo la CI §6 è rimandata). Questa roadmap aggiornata.
+- [x] Tag `v1.0.0` (senza push, come da vincolo del progetto).
 
-**Criteri di accettazione:** una persona esterna riesce a self-hostare il bot seguendo solo il README, da zero.
+**Criteri di accettazione:** una persona esterna riesce a self-hostare il bot seguendo solo il README, da zero. ✅ (README copre requisiti, token BotFather, `docker compose up`, tutte le variabili d'ambiente, comandi, limiti configurabili, backup DB e setup di sviluppo).
+
+> **Nota:** lo step 4.5 (CI) resta l'unico ⬜ della roadmap, **rimandato su richiesta dell'owner**. Tutti gli altri step sono completati e mergiati in `main`.
 
 ---
 

@@ -1,7 +1,55 @@
 # Calliope — Analisi dei punti deboli in ottica refactor
 
-> Documento di analisi del progetto allo stato attuale (branch `main`, luglio 2026).
+> Documento di analisi del progetto allo stato originale (branch `main`, luglio 2026).
 > Obiettivo: censire tutte le problematiche per pianificare un refactor che mantenga le funzionalità esistenti migliorando qualità, robustezza e manutenibilità del codice.
+
+> **✅ Refactor completato (v1.0.0).** Questo documento è ora lo **storico** dell'analisi
+> iniziale: descrive il progetto *prima* del refactor. Tutte le problematiche censite sono
+> state risolte tramite la [ROADMAP.md](ROADMAP.md); l'unica voce rimandata è la CI (§6),
+> su richiesta dell'owner. I riferimenti a file/righe qui sotto (es. `stt.py:89`,
+> `MongoClient.py`) si riferiscono al **codice pre-refactor** e non corrispondono più
+> all'attuale struttura del package.
+
+## Stato di risoluzione
+
+Legenda: ✅ risolto · ⬜ rimandato
+
+| ID | Descrizione | Stato | Step |
+|----|-------------|-------|------|
+| C1 | `/lang` no-op | ✅ | 2.2 |
+| C2 | Statistiche video note | ✅ | 2.1 |
+| C3 | Device hardcoded a `cuda` | ✅ | 2.3 |
+| C4 | `stats.py` rotto | ✅ | 2.6 |
+| C5 | Flood control (testo perso + loop bloccato) | ✅ | 2.5 + 3.2 |
+| C6 | Connessione Mongo fragile | ✅ | 2.1 |
+| C7 | `get_language` esplode sui casi limite | ✅ | 2.1 + 2.2 |
+| C8 | Variabili non definite in `stt` | ✅ | 2.4 |
+| C9 | `argparse type=bool` | ✅ | 1.4 |
+| C10 | Risorse non rilasciate | ✅ | 2.4 + 2.2 |
+| A1 | Codice bloccante in handler async | ✅ | 3.1 |
+| A2 | Side effects a import time | ✅ | 1.5 |
+| A3 | Singleton globali / no DI | ✅ | 1.5 |
+| A4 | Duplicazione di logica | ✅ | 2.1 + 2.4 |
+| A5 | Struttura package incoerente | ✅ | 1.2 |
+| A6 | Config frammentata | ✅ | 1.4 |
+| A7 | `ConfigsLoader` fragile | ✅ | 1.4 |
+| A8 | Modello dati Mongo debole | ✅ | 2.1 |
+| A9 | Streaming O(n²) | ✅ | 3.2 |
+| S1 | Trascrizioni loggate | ✅ | 0.2 + 4.2 |
+| S2 | Dettagli interni all'utente | ✅ | 3.3 |
+| S3 | Mongo esposto | ✅ | 4.1 |
+| S4 | `admin_feature.py` | ✅ | 3.4 |
+| S5 | Nessun limite d'uso | ✅ | 3.3 |
+| S6 | Container root / immagine devel | ✅ | 4.1 |
+| D1 | `poetry.lock` nel `.gitignore` | ✅ | 1.1 (migrato a uv) |
+| D2 | Dipendenze inutili | ✅ | 4.3 |
+| D3 | Versioni vecchie | ✅ | 4.3 |
+| D4 | Package non installato | ✅ | 1.2 |
+| D5 | Dockerfile/makefile incompleti | ✅ | 4.1 |
+| §5a | Feature incompiute | ✅ | 2.6 + 2.7 + 3.4 + 2.2 |
+| §5b | Codice morto | ✅ | 1.3 |
+| §6 | Test / lint / docs | ✅ | 1.3 + 4.4 + 4.6 |
+| §6 | CI/CD | ⬜ | 4.5 (rimandato — richiesta owner) |
 
 ## Funzionalità da preservare
 
