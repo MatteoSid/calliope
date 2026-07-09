@@ -1,3 +1,4 @@
+import asyncio
 import os
 import tempfile
 import time
@@ -20,6 +21,26 @@ from calliope.src.utils.utils import detect_silence, message_type, split_message
 calliope_db = calliope_db_init()
 
 whisper = WhisperInferenceModel()
+
+
+async def _send_or_edit_with_retry(operation, *, max_attempts: int = 5):
+    """Esegue un invio/modifica Telegram ritentando la STESSA operazione sul
+    flood control (``RetryAfter``), rispettando l'attesa richiesta dall'API e
+    senza bloccare l'event loop (``asyncio.sleep``).
+
+    ``operation`` è una callable senza argomenti che restituisce una nuova
+    coroutine a ogni tentativo (una coroutine non può essere ri-attesa).
+    """
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await operation()
+        except RetryAfter as e:
+            logger.warning(
+                f"Flood control, waiting {e.retry_after}s "
+                f"(attempt {attempt}/{max_attempts})"
+            )
+            await asyncio.sleep(e.retry_after)
+    raise RuntimeError(f"Flood control: giving up after {max_attempts} attempts")
 
 
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -85,30 +106,27 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             )  # -6 per "[...]"
 
             for i, part in enumerate(message_parts):
-                try:
-                    if i < len(message_parts) - 1:
-                        part += " [...]"
+                if i < len(message_parts) - 1:
+                    part += " [...]"
 
-                    if i == 0:
-                        await context.bot.edit_message_text(
+                # Su flood control la STESSA parte viene ritentata (niente più
+                # perdita di testo) e l'attesa non blocca l'event loop.
+                if i == 0:
+                    await _send_or_edit_with_retry(
+                        lambda part=part: context.bot.edit_message_text(
                             text=part,
                             chat_id=current_message.chat_id,
                             message_id=current_message.message_id,
                         )
-                    else:
-                        current_message = await context.bot.send_message(
+                    )
+                else:
+                    current_message = await _send_or_edit_with_retry(
+                        lambda part=part: context.bot.send_message(
                             chat_id=current_message.chat_id,
                             text=part,
                             disable_notification=True,
                         )
-                except RetryAfter as e:
-                    # Workaraound for Flood Control
-                    # TODO: find a better solution
-                    logger.warning(
-                        f"{update.message.from_user.username}: Flood control, sleeping for {e.retry_after}s"
                     )
-                    logger.warning(f"message length: {duration}")
-                    time.sleep(e.retry_after)
 
             full_transcription = message_parts[
                 -1
