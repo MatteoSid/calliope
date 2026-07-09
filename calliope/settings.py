@@ -11,10 +11,10 @@ Docker basta l'iniezione via ``env_file:`` del compose.
 """
 
 import os
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import SecretStr, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -46,7 +46,11 @@ class Settings(BaseSettings):
 
     # --- Limiti / runtime ---
     silence_threshold: int = 70  # predisposta per lo step 2.7 (detect_silence)
-    max_media_duration_s: int = 1800  # predisposta per lo step 3.3
+    max_media_duration_s: int = 1800  # media più lunghi vengono rifiutati (3.3)
+    # Allowlist di chat abilitate (vuota = bot pubblico). Utile a chi self-hosta
+    # su GPU propria. In ``.env``: ``ALLOWED_CHAT_IDS=123,456`` (interi separati
+    # da virgola). NoDecode evita il parsing JSON automatico di pydantic-settings.
+    allowed_chat_ids: Annotated[list[int], NoDecode] = []
     log_level: str = "INFO"
 
     @field_validator("admin_chat_id", "default_language", mode="before")
@@ -57,6 +61,21 @@ class Settings(BaseSettings):
         if isinstance(v, str) and v.strip() == "":
             return None
         return v
+
+    @field_validator("allowed_chat_ids", mode="before")
+    @classmethod
+    def _parse_id_list(cls, v: object) -> object:
+        """Parsa la lista di chat ID da stringa comma-separated (o la lascia
+        invariata se già una lista)."""
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return []
+        if isinstance(v, str):
+            return [int(x.strip()) for x in v.split(",") if x.strip()]
+        return v
+
+    def chat_allowed(self, chat_id: int) -> bool:
+        """True se la chat può usare il bot (allowlist vuota = tutte)."""
+        return not self.allowed_chat_ids or chat_id in self.allowed_chat_ids
 
 
 settings = Settings()  # type: ignore[call-arg]  # i campi sono caricati dall'ambiente
