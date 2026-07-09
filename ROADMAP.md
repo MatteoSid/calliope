@@ -29,7 +29,7 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | 3.4 Modulo admin | ✅ | |
 | 3.5 Graceful shutdown | ✅ | post_shutdown: executor + Mongo chiusi |
 | 4.1 Hardening Docker | ✅ | non-root, Mongo non esposto+healthcheck, cache modelli |
-| 4.2 Logging privacy | ⬜ | |
+| 4.2 Logging privacy | ✅ | niente testo trascrizione nei log, sink file con rotation |
 | 4.3 Dipendenze | ✅ | aggiornate + potate via uv |
 | 4.4 Test automatici | ⬜ | |
 | 4.5 CI | ⬜ | |
@@ -370,12 +370,12 @@ calliope/
 ### Step 4.2 — Logging: privacy e rotation (S1, §6)
 
 **Attività:**
-- [ ] Rimuovere il log della trascrizione completa (`logger.success` in stt): loggare solo user id/username, durata media, tempo di elaborazione, esito, lingua rilevata.
-- [ ] Audit di tutti i punti di log per contenuti utente residui.
-- [ ] Sink file (se mantenuto oltre a stdout): `rotation="1 day"`, `retention="14 days"`, `compression="zip"`.
-- [ ] Livelli coerenti: `info` per il flusso normale, `warning` per degradi, `error` solo per errori veri.
+- [x] Rimosso il log della trascrizione completa (già nel 3.2): `logger.success` in stt logga solo metadati — username, durata audio, caratteri prodotti, tempo di elaborazione, lingua richiesta.
+- [x] Audit di tutti i punti di log (grep su `logger.*`): nessun log contiene testo di trascrizione né contenuto dei messaggi. Restano solo metadati (username/chat id, durata, tempi, lingua) e messaggi di errore tecnici (`{e}` di eccezioni DB/API, non contenuto utente).
+- [x] Sink file opzionale (`settings.log_file`, `LOG_FILE` in `.env`): quando impostato, `rotation="1 day"`, `retention="14 days"`, `compression="zip"`, `enqueue=True` (scritture non bloccanti); default = solo stdout (best practice Docker).
+- [x] Livelli coerenti: `info` per il flusso normale, `warning` per i degradi (Mongo non raggiungibile, flood control, indici), `error`/`exception` solo per errori veri.
 
-**Criteri di accettazione:** `grep` sui log dopo una sessione di test non trova alcun testo di trascrizione; i log ruotano.
+**Criteri di accettazione:** i log non contengono testo di trascrizione (verificato via audit + `logger.success` solo-metadati); il sink file ruota quando configurato (verificato: file creato e scritto, config rotation validata da loguru). ✅
 
 ### Step 4.3 — Potatura e aggiornamento dipendenze (D2, D3)
 

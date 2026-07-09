@@ -82,7 +82,10 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await streamer.add(text)
     await streamer.finish()
 
+    # Log di solo metadati (nessun testo di trascrizione): utente, durata audio,
+    # caratteri prodotti, tempo di elaborazione, lingua richiesta.
     logger.success(
-        f"{update.message.from_user.username}: "
-        f"{len(streamer.text)} chars in {round(time.time() - start_time, 2)}s"
+        f"{update.message.from_user.username}: transcribed {duration}s audio "
+        f"({len(streamer.text)} chars) in {round(time.time() - start_time, 2)}s "
+        f"[lang={language or 'auto'}]"
     )
