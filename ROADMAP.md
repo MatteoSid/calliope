@@ -10,7 +10,7 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | Step | Stato | Note |
 |------|-------|------|
 | 0.1 Smoke test | ✅ | `docs/smoke-test.md` |
-| 0.2 Pulizia repo | ⬜ | |
+| 0.2 Pulizia repo | ✅ | notebook in `notebooks/`, `CLAUDE.md` committato |
 | 1.1 Lockfile | ✅ | migrato a **uv**: `uv.lock` committato |
 | 1.2 Struttura package | ⬜ | |
 | 1.3 Tooling ruff/mypy | ⬜ | |
@@ -70,11 +70,11 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 **Obiettivo:** repository pulito prima di iniziare.
 
 **Attività:**
-- [ ] Rimuovere `temp_audio.wav`, svuotare `logs/` (contengono dati utente — S1), spostare i notebook (`yt_download.ipynb`, `diarization.ipynb`, `calliope_segmentation.ipynb`) in una cartella `notebooks/` o eliminarli se non servono più.
-- [ ] Aggiungere `logs/` al `.gitignore` (oggi è coperto solo da `*.log`).
-- [ ] Decidere il destino di `CLAUDE.md` (committarlo o ignorarlo).
+- [x] Rimuovere `temp_audio.wav`, svuotare `logs/` (contengono dati utente — S1), spostare i notebook (`yt_download.ipynb`, `diarization.ipynb`, `calliope_segmentation.ipynb`) in una cartella `notebooks/`.
+- [x] Aggiungere `logs/` al `.gitignore` (oggi è coperto solo da `*.log`).
+- [x] Decidere il destino di `CLAUDE.md`: **committato** (guida di progetto).
 
-**Criteri di accettazione:** `git status` pulito, nessun file con dati utente nella working tree.
+**Criteri di accettazione:** `git status` pulito, nessun file con dati utente nella working tree. ✅
 
 ---
 

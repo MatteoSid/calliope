@@ -1,0 +1,3 @@
+Questo è un progetto a cui ho lavorato negli scorsi anni, è molto acerbo e vorrei aggiornarlo con un codice più pulito e scritto meglio. Non è un progetto di Joule ma comunque useremo lo stesso approccio perché voglio farlo diventare un progetto ben fatto.
+
+Ogni volta che ti chiedo di fare commit voglio che fai una nuova branch esplicativa dell'intervento e fai un commit riassuntivo delle modifiche fatte. Non devi fare push.
