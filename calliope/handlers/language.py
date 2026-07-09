@@ -3,7 +3,7 @@ from loguru import logger
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from calliope.src.utils.MongoClient import calliope_db_init
+from calliope.storage.mongo import calliope_db_init
 
 calliope_db = calliope_db_init()
 

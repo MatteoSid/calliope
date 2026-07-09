@@ -12,7 +12,7 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | 0.1 Smoke test | ✅ | `docs/smoke-test.md` |
 | 0.2 Pulizia repo | ✅ | notebook in `notebooks/`, `CLAUDE.md` committato |
 | 1.1 Lockfile | ✅ | migrato a **uv**: `uv.lock` committato |
-| 1.2 Struttura package | ⬜ | |
+| 1.2 Struttura package | ✅ | handlers/transcription/media/storage; entry point `calliope` |
 | 1.3 Tooling ruff/mypy | ⬜ | |
 | 1.4 Config pydantic-settings | ✅ | `calliope/settings.py` |
 | 1.5 Bootstrap esplicito | ⬜ | |
@@ -114,13 +114,13 @@ calliope/
 ```
 
 **Attività:**
-- [ ] Aggiungere `__init__.py` ovunque; eliminare il livello `calliope/src/`.
-- [ ] Rinominare `MongoClient.py` → `storage/mongo.py`; smembrare `utils.py` (lo split messaggi va in `transcription/formatting.py`, `message_type` negli handler, `title`/figlet si elimina — vedi §5 dell'analisi).
-- [ ] Definire l'entry point in `pyproject.toml`: `[tool.poetry.scripts] calliope = "calliope.main:main"`.
-- [ ] Aggiornare `makefile`, `docker-compose.yml` (comando → `poetry run calliope`) e Dockerfile (`poetry install --only main` **senza** `--no-root`).
-- [ ] Spostare `configs.yaml` dentro il package o (meglio) eliminarlo nello step 1.4.
+- [x] Aggiungere `__init__.py` ovunque; eliminare il livello `calliope/src/`.
+- [x] Rinominare `MongoClient.py` → `storage/mongo.py`; smembrare `utils.py` (lo split messaggi + `format_timedelta` in `transcription/formatting.py`, `detect_silence` in `media/silence.py`, `message_type` inlinato in `handlers/transcribe.py`, `title`/figlet eliminati). Il notifier admin → `calliope/notifier.py`, il logger → `calliope/logging_setup.py`.
+- [x] Definire l'entry point in `pyproject.toml`: **`[project.scripts] calliope = "calliope.main:main"`** (formato uv/PEP 621; il progetto è ora installabile con build-backend hatchling).
+- [x] Aggiornare `makefile` (`uv run calliope`), `docker-compose.yml` (usa il `CMD`) e Dockerfile (`uv sync` a due fasi che installa il progetto → `CMD ["calliope"]`, figlet rimosso).
+- [x] `configs.yaml` già assente (rimosso in precedenza).
 
-**Criteri di accettazione:** il bot parte con `poetry run calliope` da qualunque directory; nessun riferimento a `PYTHONPATH` residuo; smoke test 0.1 verde.
+**Criteri di accettazione:** il bot parte con `calliope` (console script) senza `PYTHONPATH`; smoke test 0.1 verde (build + avvio validati). ✅
 
 **Nota:** questo step è quasi solo `git mv` + fix import. Non cambiare logica qui: le funzioni si spostano identiche, si rifattorizzano nelle fasi successive.
 

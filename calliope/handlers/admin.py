@@ -16,10 +16,10 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import Forbidden, TelegramError
 from telegram.ext import ContextTypes
 
-from calliope.src.models.inference_model import WhisperInferenceModel
-from calliope.src.utils.admin import is_admin, notify_error
-from calliope.src.utils.MongoClient import calliope_db_init
-from calliope.src.utils.utils import format_timedelta
+from calliope.transcription.whisper import WhisperInferenceModel
+from calliope.notifier import is_admin, notify_error
+from calliope.storage.mongo import calliope_db_init
+from calliope.transcription.formatting import format_timedelta
 
 calliope_db = calliope_db_init()
 

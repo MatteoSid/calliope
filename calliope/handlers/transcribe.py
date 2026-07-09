@@ -12,15 +12,27 @@ from telegram._files.voice import Voice
 from telegram.error import RetryAfter
 from telegram.ext import ContextTypes
 
+from calliope.media.silence import detect_silence
+from calliope.notifier import notify_error, notify_registration
 from calliope.settings import settings
-from calliope.src.models.inference_model import WhisperInferenceModel
-from calliope.src.utils.admin import notify_error, notify_registration
-from calliope.src.utils.MongoClient import calliope_db_init
-from calliope.src.utils.utils import detect_silence, message_type, split_message
+from calliope.storage.mongo import calliope_db_init
+from calliope.transcription.formatting import split_message
+from calliope.transcription.whisper import WhisperInferenceModel
 
 calliope_db = calliope_db_init()
 
 whisper = WhisperInferenceModel()
+
+
+def message_type(update):
+    """Ritorna il tipo di attachment del messaggio (Voice o VideoNote), altrimenti None."""
+    attachment = update.effective_message.effective_attachment
+    if type(attachment) == Voice:
+        return Voice
+    elif type(attachment) == VideoNote:
+        return VideoNote
+    else:
+        return None
 
 
 async def _send_or_edit_with_retry(operation, *, max_attempts: int = 5):

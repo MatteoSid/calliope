@@ -9,9 +9,9 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from calliope.settings import settings
-from calliope.src.models.inference_model import WhisperInferenceModel
-from calliope.src.utils.MongoClient import calliope_db_init
-from calliope.src.utils.utils import detect_silence
+from calliope.transcription.whisper import WhisperInferenceModel
+from calliope.storage.mongo import calliope_db_init
+from calliope.media.silence import detect_silence
 
 whisper = WhisperInferenceModel()
 calliope_db = calliope_db_init()
