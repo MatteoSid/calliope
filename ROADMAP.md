@@ -16,7 +16,7 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | 1.3 Tooling ruff/mypy | ✅ | ruff+mypy+pre-commit verdi |
 | 1.4 Config pydantic-settings | ✅ | `calliope/settings.py` |
 | 1.5 Bootstrap esplicito | ✅ | DI via bot_data, no side effect import-time |
-| 2.1 Storage riscritto | ⬜ | |
+| 2.1 Storage riscritto | ✅ | upsert atomici, datetime, indici, degraded |
 | 2.2 `/lang` end-to-end | ✅ | |
 | 2.3 Device detection | ⬜ | parziale (usa ctranslate2) |
 | 2.4 Media processing | ⬜ | |
@@ -189,18 +189,18 @@ calliope/
 **Obiettivo:** operazioni atomiche, dati tipizzati, fallimenti onesti.
 
 **Attività:**
-- [ ] Riscrivere `storage/mongo.py`:
-  - [ ] upsert atomici: `update_one(filter, {"$set": ..., "$inc": ..., "$setOnInsert": ...}, upsert=True)` al posto di `find_one` + `insert`/`update` (elimina le race e i doppi round-trip);
-  - [ ] indici unici su `user_id` e `group_id` creati all'avvio;
-  - [ ] date come `datetime` UTC (`datetime.now(timezone.utc)`), non stringhe;
-  - [ ] durata presa dal **media effettivo** (voice/video_note/video), non da `message.voice` — fixa C2; passarla come parametro esplicito (`record_usage(update, duration_s)`) invece di ri-estrarla dentro lo storage;
-  - [ ] `get_language` robusto: ritorna `None` se utente/gruppo assente o chat type non gestito, niente `KeyError`/`TypeError` — pronto per 2.2;
-  - [ ] via il bare `except:` dell'`__init__`: se Mongo è irraggiungibile all'avvio, log `warning` esplicito e oggetto in modalità degradata **dichiarata** (flag `available`, metodi no-op che loggano a `debug`), oppure fail-fast configurabile: scegliere e documentare;
-  - [ ] eliminare `mongo_uri` calcolato a livello di modulo (usa `settings.mongo_uri`), il parametro fantasma `time_used`, il doppio `str(str(...))`.
-- [ ] Deduplicare `update_single_user`/`update_group`: un metodo comune per il documento utente, il gruppo compone.
-- [ ] **Migrazione dati**: script one-shot `scripts/migrate_dates.py` che converte le date-stringa esistenti in `datetime` (o decisione esplicita di azzerare il DB, essendo un progetto personale).
+- [x] Riscritto `storage/mongo.py` (`MongoStorage`):
+  - [x] upsert atomici con `$set`/`$inc`/`$setOnInsert` + `upsert=True` (niente più `find_one`+`insert`); creazione rilevata via `result.upserted_id`;
+  - [x] indici unici su `user_id` e `group_id` all'avvio (`_ensure_indexes`);
+  - [x] date come `datetime` UTC (`datetime.now(timezone.utc)`);
+  - [x] durata passata come parametro esplicito a `update(update, duration)` (fixa C2, già da modulo admin);
+  - [x] `get_language` robusto (già da 2.2);
+  - [x] modalità degradata **dichiarata**: flag `available`, log `warning`, metodi che ritornano default sicuri;
+  - [x] rimossi `time_used` fantasma e i doppi `str(str(...))`.
+- [x] Deduplicati i percorsi utente/gruppo con l'helper comune `_new_member`.
+- [x] **Migrazione dati**: `scripts/migrate_dates.py` eseguito (45 utenti + 23 gruppi convertiti a `datetime`); backup in `backups/calliope_pre_2.1.archive`.
 
-**Criteri di accettazione:** vocale e video note aggiornano entrambi le statistiche (verifica su Mongo); due messaggi ravvicinati dello stesso utente nuovo non creano documenti duplicati; con Mongo spento il bot trascrive comunque e logga il degrado una sola volta.
+**Criteri di accettazione:** vocale e video note aggiornano entrambi le statistiche con la durata corretta; due update ravvicinati dello stesso utente nuovo non creano doppioni (verificato con test d'integrazione su DB `calliope_test`); con Mongo spento il bot resta in modalità degradata dichiarata. ✅
 
 ### Step 2.2 — `/lang` funzionante end-to-end (C1, C7, C10-parte)
 

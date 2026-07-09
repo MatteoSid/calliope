@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from loguru import logger
 from telegram import Update
@@ -13,6 +13,13 @@ def _display_name(member: dict) -> str:
     if username:
         return f"@{username}"
     return member.get("first_name") or str(member.get("user_id", "unknown"))
+
+
+def _fmt_date(value) -> str:
+    """Formatta una data (datetime o stringa legacy) per la visualizzazione."""
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M")
+    return str(value) if value else "—"
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -41,8 +48,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "📊 Your Calliope stats\n\n"
             f"Transcriptions: {times_used}\n"
             f"Total speech transcribed: {format_timedelta(total_speech_time)}\n"
-            f"First use: {document.get('first_use', '—')}\n"
-            f"Last use: {document.get('last_use', '—')}"
+            f"First use: {_fmt_date(document.get('first_use'))}\n"
+            f"Last use: {_fmt_date(document.get('last_use'))}"
         )
         return
 
