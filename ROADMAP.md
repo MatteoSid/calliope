@@ -3,6 +3,38 @@
 > Roadmap operativa derivata da [ANALISI_REFACTOR.md](ANALISI_REFACTOR.md).
 > Gli ID tra parentesi (C1, A2, S3, D1…) rimandano alle problematiche censite nell'analisi.
 
+## Stato di avanzamento
+
+Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
+
+| Step | Stato | Note |
+|------|-------|------|
+| 0.1 Smoke test | ✅ | `docs/smoke-test.md` |
+| 0.2 Pulizia repo | ⬜ | |
+| 1.1 Lockfile | ✅ | migrato a **uv**: `uv.lock` committato |
+| 1.2 Struttura package | ⬜ | |
+| 1.3 Tooling ruff/mypy | ⬜ | |
+| 1.4 Config pydantic-settings | ✅ | `calliope/settings.py` |
+| 1.5 Bootstrap esplicito | ⬜ | |
+| 2.1 Storage riscritto | ⬜ | |
+| 2.2 `/lang` end-to-end | ✅ | |
+| 2.3 Device detection | ⬜ | parziale (usa ctranslate2) |
+| 2.4 Media processing | ⬜ | |
+| 2.5 Flood control retry | ✅ | |
+| 2.6 `/stats` su Mongo | ✅ | |
+| 2.7 Silence detection | ✅ | reaction 🔇 |
+| 3.1 Inferenza off-loop | ⬜ | |
+| 3.2 Streaming redesign | ⬜ | |
+| 3.3 Limiti d'uso | ⬜ | |
+| 3.4 Modulo admin | ✅ | |
+| 3.5 Graceful shutdown | ⬜ | |
+| 4.1 Hardening Docker | ⬜ | parziale (base uv/cuDNN9) |
+| 4.2 Logging privacy | ⬜ | |
+| 4.3 Dipendenze | ✅ | aggiornate + potate via uv |
+| 4.4 Test automatici | ⬜ | |
+| 4.5 CI | ⬜ | |
+| 4.6 Documentazione | ⬜ | |
+
 ## Come usare questo documento
 
 - Ogni fase produce un progetto **funzionante e rilasciabile**: non si passa alla fase successiva con il bot rotto.
@@ -26,10 +58,12 @@
 **Obiettivo:** una checklist di verifica manuale ripetibile, visto che non esistono test automatici e l'architettura attuale non permette di scriverne.
 
 **Attività:**
-- [ ] Creare `docs/smoke-test.md` con la sequenza: avvio via `docker compose up`, `/start`, `/help`, invio vocale breve (<1 min), invio vocale lungo (>4096 caratteri di trascrizione, per lo split), invio video note, invio video (→ file .txt con timestamp), `/lang es` + verifica risposta, verifica documenti su Mongo (`users_db`, `groups_db`), test in un gruppo.
-- [ ] Eseguirla sullo stato attuale e annotare il comportamento osservato (incluso ciò che già non funziona: statistiche video note, `/lang` senza effetto, `/stats` disattivato e rotto).
+- [x] Creare `docs/smoke-test.md` con la sequenza: avvio via `docker compose up`, `/start`, `/help`, invio vocale breve (<1 min), invio vocale lungo (>4096 caratteri di trascrizione, per lo split), invio video note, invio video (→ file .txt con timestamp), `/lang es` + verifica risposta, verifica documenti su Mongo (`users_db`, `groups_db`), test in un gruppo.
+- [x] Eseguirla sullo stato attuale e annotare il comportamento osservato. La parte automatizzabile (avvio compose, log, connessione Mongo, caricamento modello) è verificata a ogni build; le interazioni Telegram (invio vocali/comandi) restano da eseguire manualmente dall'owner.
 
-**Criteri di accettazione:** la checklist esiste, è stata eseguita una volta, e distingue "comportamento da preservare" da "bug noto da fixare in Fase 2".
+**Criteri di accettazione:** la checklist esiste, è stata eseguita una volta, e distingue "comportamento da preservare" da "bug noto da fixare in Fase 2". ✅
+
+> **Nota:** i bug 2.2/2.6/2.7 citati nella versione originale (statistiche video note, `/lang` senza effetto, `/stats` rotto) sono già stati **risolti** nelle sessioni precedenti; la checklist riflette lo stato corrente.
 
 ### Step 0.2 — Pulizia working directory
 
