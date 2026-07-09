@@ -37,6 +37,22 @@ async def _post_init(application: Application) -> None:
     await application.bot.set_my_commands(BOT_COMMANDS)
 
 
+async def _post_shutdown(application: Application) -> None:
+    """Rilascio ordinato delle risorse allo spegnimento (SIGTERM/SIGINT).
+
+    A questo punto PTB ha già atteso il completamento degli handler in corso
+    (una trascrizione in coda viene portata a termine, nessun messaggio appeso
+    su "[...]"): l'executor è quindi inattivo e si chiude subito.
+    """
+    logger.info("Shutting down: releasing resources")
+    transcriber = application.bot_data.get("transcriber")
+    if transcriber is not None:
+        transcriber.shutdown()
+    storage = application.bot_data.get("storage")
+    if storage is not None:
+        storage.close()
+
+
 def main() -> None:
     """Bootstrap esplicito: logging → storage → modello → application.
 
@@ -59,6 +75,7 @@ def main() -> None:
         # su un thread executor dedicato, fuori dall'event loop).
         .concurrent_updates(True)
         .post_init(_post_init)
+        .post_shutdown(_post_shutdown)
         .build()
     )
 

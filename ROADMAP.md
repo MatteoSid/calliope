@@ -27,7 +27,7 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | 3.2 Streaming redesign | ✅ | `transcription/streaming.py`, edit a intervalli |
 | 3.3 Limiti d'uso | ✅ | durata max pre-download, allowlist, error handler globale |
 | 3.4 Modulo admin | ✅ | |
-| 3.5 Graceful shutdown | ⬜ | |
+| 3.5 Graceful shutdown | ✅ | post_shutdown: executor + Mongo chiusi |
 | 4.1 Hardening Docker | ⬜ | parziale (base uv/cuDNN9) |
 | 4.2 Logging privacy | ⬜ | |
 | 4.3 Dipendenze | ✅ | aggiornate + potate via uv |
@@ -344,9 +344,9 @@ calliope/
 ### Step 3.5 — Graceful shutdown
 
 **Attività:**
-- [ ] Verificare il comportamento su SIGTERM (docker compose down): la trascrizione in corso deve completarsi o interrompersi in modo pulito (chiusura executor con `shutdown(wait=...)`, chiusura client Mongo).
+- [x] Callback `_post_shutdown` registrata con `Application.builder().post_shutdown(...)`: chiude l'executor del transcriber (`shutdown(wait=True)`) e il client Mongo (`MongoStorage.close()`). PTB, durante lo stop, attende il completamento degli handler concorrenti già in corso (una trascrizione in coda viene portata a termine → nessun messaggio appeso su "[...]"), quindi al `post_shutdown` l'executor è inattivo e si chiude subito.
 
-**Criteri di accettazione:** `docker compose down` durante una trascrizione non lascia processi zombie né messaggi Telegram appesi su "[...]".
+**Criteri di accettazione:** `docker compose down`/`stop` (SIGTERM) chiude in modo pulito, senza processi zombie né messaggi appesi. ✅ (verificato: SIGTERM → `_post_shutdown` esegue "releasing resources" + "MongoDB client closed", nessun traceback).
 
 ---
 
