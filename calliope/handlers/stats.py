@@ -4,8 +4,8 @@ from loguru import logger
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from calliope.src.utils.MongoClient import calliope_db_init
-from calliope.src.utils.utils import format_timedelta
+from calliope.storage.mongo import calliope_db_init
+from calliope.transcription.formatting import format_timedelta
 
 calliope_db = calliope_db_init()
 

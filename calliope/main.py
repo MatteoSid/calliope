@@ -10,20 +10,16 @@ from telegram.ext import (
     filters,
 )
 
+from calliope.handlers.admin import admin, broadcast_callback, error_handler
+from calliope.handlers.help import help_command
+from calliope.handlers.language import change_language
+from calliope.handlers.start import start
+from calliope.handlers.stats import stats
+from calliope.handlers.timestamp import timestamp
+from calliope.handlers.transcribe import stt
+from calliope.logging_setup import logger_setter
 from calliope.settings import settings
-from calliope.src.utils.utils import title
-
-title()
-
-from calliope.src.commands.admin import admin, broadcast_callback, error_handler
-from calliope.src.commands.change_language import change_language
-from calliope.src.commands.help import help_command
-from calliope.src.commands.start import start
-from calliope.src.commands.stats import stats
-from calliope.src.commands.stt import stt
-from calliope.src.commands.timestamp import timestamp
-from calliope.src.utils.logger_setter import logger_setter
-from calliope.src.utils.MongoClient import calliope_db_init
+from calliope.storage.mongo import calliope_db_init
 
 logger_setter()
 

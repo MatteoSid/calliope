@@ -1,3 +1,3 @@
-from calliope.calliope import main
+from calliope.main import main
 
 main()

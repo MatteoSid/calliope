@@ -1,5 +1,5 @@
 run:
-	uv run python -m calliope
+	uv run calliope
 
 sync:
 	uv sync

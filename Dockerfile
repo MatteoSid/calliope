@@ -14,11 +14,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     UV_LINK_MODE=copy
 
 # Dipendenze di sistema audio/video:
-# figlet: banner ASCII a runtime; libsndfile1: librosa; ffmpeg: moviepy/av.
+# libsndfile1: librosa; ffmpeg: moviepy/av.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
-        figlet \
         libsndfile1 \
         ffmpeg \
     && apt-get clean \
@@ -26,15 +25,16 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Installa SOLO le dipendenze di produzione dal lockfile (layer cache-abile).
-# --frozen: usa uv.lock così com'è, senza ri-risolvere.
-COPY pyproject.toml uv.lock .python-version /app/
+# Fase 1: installa SOLO le dipendenze dal lockfile (layer cache-abile),
+# senza il progetto. --frozen: usa uv.lock così com'è.
+COPY pyproject.toml uv.lock .python-version README.md /app/
+RUN uv sync --frozen --no-install-project --no-dev
+
+# Fase 2: copia il codice e installa il progetto (crea lo script `calliope`).
+COPY calliope /app/calliope
 RUN uv sync --frozen --no-dev
 
-# Copia il codice dell'applicazione.
-COPY calliope /app/calliope
-
-# La venv diventa il Python di default: `python -m calliope` usa /app/.venv.
+# La venv diventa il Python di default: lo script `calliope` è in /app/.venv/bin.
 ENV PATH="/app/.venv/bin:$PATH"
 
-CMD ["python", "-m", "calliope"]
+CMD ["calliope"]
