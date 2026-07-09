@@ -1,54 +1,84 @@
+from datetime import timedelta
+
 from loguru import logger
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from calliope.src.utils.MongoClient import calliope_db_init
+from calliope.src.utils.utils import format_timedelta
 
-# TODO: convert in mongodb
+calliope_db = calliope_db_init()
+
+
+def _display_name(member: dict) -> str:
+    """Nome da mostrare per un membro: @username, altrimenti nome, altrimenti id."""
+    username = member.get("username")
+    if username:
+        return f"@{username}"
+    return member.get("first_name") or str(member.get("user_id", "unknown"))
+
+
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /stats is issued."""
-    logger.info(f"{update.message.from_user.username}: Stats command")
-    file_path = "stast.json"
+    """Mostra le statistiche d'uso leggendo da MongoDB.
 
-    try:
-        with open(file_path, "r") as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        await update.message.reply_text("Stats not found")
-        logger.error("Stats not found")
+    In chat privata: statistiche personali dell'utente.
+    Nei gruppi: statistiche del gruppo + classifica dei membri per tempo di
+    parlato trascritto.
+    """
+    logger.info(f"{update.message.from_user.username}: Stats command")
+    chat_type = str(update.message.chat.type)
+
+    if chat_type == "private":
+        document = calliope_db.get_user_stats(update)
+        if not document or not document.get("times_used"):
+            await update.message.reply_text(
+                "You haven't used Calliope yet. Send me a voice or video "
+                "message and check back!"
+            )
+            return
+
+        times_used = document.get("times_used", 0)
+        total_speech_time = timedelta(seconds=document.get("total_speech_time", 0))
+        await update.message.reply_text(
+            "📊 Your Calliope stats\n\n"
+            f"Transcriptions: {times_used}\n"
+            f"Total speech transcribed: {format_timedelta(total_speech_time)}\n"
+            f"First use: {document.get('first_use', '—')}\n"
+            f"Last use: {document.get('last_use', '—')}"
+        )
         return
 
-    # check if is a single user or a group
-    if str(update.message.chat.type) == "private":
-        # check if there is stats for the user
-        if str(update.message.from_user.id) in data["single_users"]:
-            total_speech_time = timedelta(
-                seconds=data["single_users"][str(update.message.from_user.id)][
-                    "total_speech_time"
-                ]
-            )
+    if chat_type in ("group", "supergroup"):
+        document = calliope_db.get_group_stats(update)
+        members = document.get("members_stats", []) if document else []
+        if not document or not members:
             await update.message.reply_text(
-                f"Time speech converted:\n{format_timedelta(total_speech_time)}"
+                "No stats for this group yet. Send a voice or video message "
+                "and check back!"
             )
-            logger.success("Stats sent")
-        else:
-            await update.message.reply_text("Stats not found")
-            logger.error("Stats not found")
+            return
 
-    elif str(update.message.chat.type) in ["group", "supergroup"]:
-        # check if there is stats for the group
-        if str(update.message.chat.id) in data["groups"]:
-            # load user stats in a dataframe
-            members_stats = data["groups"][str(update.message.chat.id)]["members_stats"]
-            data_tmp = pd.DataFrame.from_dict(
-                members_stats, orient="index", columns=["total_speech_time"]
+        ranking = sorted(
+            members,
+            key=lambda member: member.get("total_speech_time", 0),
+            reverse=True,
+        )
+
+        lines = [
+            "📊 Group stats\n",
+            f"Total transcriptions: {document.get('times_used', 0)}",
+            "",
+            "🏆 Leaderboard by speech time:",
+        ]
+        for position, member in enumerate(ranking, start=1):
+            speech_time = timedelta(seconds=member.get("total_speech_time", 0))
+            lines.append(
+                f"{position}. {_display_name(member)}: "
+                f"{format_timedelta(speech_time)}"
             )
-            data_tmp.sort_values(by="total_speech_time", ascending=False, inplace=True)
+        await update.message.reply_text("\n".join(lines))
+        return
 
-            result = ""
-            for index, row in data_tmp.iterrows():
-                total_speech_time = timedelta(seconds=int(row["total_speech_time"]))
-                result += f"@{index}: {format_timedelta(total_speech_time)}\n"
-
-            await update.message.reply_text(result)
-        else:
-            await update.message.reply_text("Stats not found")
+    await update.message.reply_text(
+        "Stats are available only in private chats and groups."
+    )

@@ -1,4 +1,5 @@
 from loguru import logger
+from telegram import BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from calliope.settings import settings
@@ -9,6 +10,7 @@ title()
 from calliope.src.commands.change_language import change_language
 from calliope.src.commands.help import help_command
 from calliope.src.commands.start import start
+from calliope.src.commands.stats import stats
 from calliope.src.commands.stt import stt
 from calliope.src.commands.timestamp import timestamp
 from calliope.src.utils.logger_setter import logger_setter
@@ -20,6 +22,19 @@ calliope_db = calliope_db_init()
 
 logger.info("Starting Calliope")
 
+# Comandi mostrati nel menu di Telegram (impostati all'avvio via set_my_commands).
+BOT_COMMANDS = [
+    BotCommand("start", "Start the bot"),
+    BotCommand("help", "How to use Calliope"),
+    BotCommand("stats", "Show your usage statistics"),
+    BotCommand("lang", "Set the transcription language"),
+]
+
+
+async def _post_init(application: Application) -> None:
+    """Registra i comandi del bot in Telegram all'avvio."""
+    await application.bot.set_my_commands(BOT_COMMANDS)
+
 
 def main() -> None:
     """Start the bot."""
@@ -29,6 +44,7 @@ def main() -> None:
         .token(settings.telegram_token.get_secret_value())
         .read_timeout(60)
         .write_timeout(60)
+        .post_init(_post_init)
         .build()
     )
     logger.info("Application is running")
@@ -36,7 +52,7 @@ def main() -> None:
     # on different commands - answer in Telegram
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    # application.add_handler(CommandHandler("stats", stats))
+    application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("lang", change_language))
 
     application.add_handler(MessageHandler(filters.VOICE & ~filters.COMMAND, stt))
