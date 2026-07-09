@@ -29,23 +29,30 @@ def split_message(message: str, max_length: int) -> list:
     return parts
 
 
-# def format_timedelta(td: timedelta) -> str:
-#     """
-#     Format a timedelta object into a string
-#     """
-#     days = td.days
-#     hours, remainder = divmod(td.seconds, 3600)
-#     minutes, seconds = divmod(remainder, 60)
-#     result = []
-#     if days > 0:
-#         result.append(f"{days} days")
-#     if hours > 0:
-#         result.append(f"{hours} hours")
-#     if minutes > 0:
-#         result.append(f"{minutes} minutes")
-#     if seconds > 0:
-#         result.append(f"{seconds} seconds")
-#     return " e ".join(result)
+def format_timedelta(td: timedelta) -> str:
+    """Formatta una ``timedelta`` in una stringa leggibile, es. ``"1h 2m 3s"``.
+
+    Restituisce ``"0s"`` per durate nulle o negative. Mostra solo le unità
+    diverse da zero, dalla più grande alla più piccola.
+    """
+    total_seconds = int(td.total_seconds())
+    if total_seconds <= 0:
+        return "0s"
+
+    days, remainder = divmod(total_seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    if seconds:
+        parts.append(f"{seconds}s")
+    return " ".join(parts)
 
 
 # TODO: introduce silence detection

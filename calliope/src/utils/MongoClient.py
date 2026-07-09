@@ -159,6 +159,28 @@ class MongoWriter:
                 array_filters=[{"elem.user_id": str(update.message.from_user.id)}],
             )
 
+    def get_user_stats(self, update):
+        """Ritorna il documento statistiche dell'utente, o ``None`` se assente
+        o se Mongo non è raggiungibile."""
+        try:
+            return self.users_collection.find_one(
+                {"user_id": str(update.message.from_user.id)}
+            )
+        except Exception as e:
+            logger.error(f"Error reading user stats: {e}")
+            return None
+
+    def get_group_stats(self, update):
+        """Ritorna il documento statistiche del gruppo, o ``None`` se assente
+        o se Mongo non è raggiungibile."""
+        try:
+            return self.groups_collection.find_one(
+                {"group_id": str(update.message.chat.id)}
+            )
+        except Exception as e:
+            logger.error(f"Error reading group stats: {e}")
+            return None
+
     def get_language(self, update) -> str | None:
         """Restituisce la lingua di trascrizione impostata per la chat.
 
