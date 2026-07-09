@@ -22,6 +22,12 @@ screenshots/
 .env*
 model/
 
-# Documentazione e config di sviluppo che non servono nell'immagine
-ROADMAP.md
-CLAUDE.md
+# Documentazione, test e utility di sviluppo che non servono nell'immagine.
+# README.md è escluso dall'ignore perché il Dockerfile lo copia (build).
+*.md
+!README.md
+docs/
+scripts/
+tests/
+.github/
+.pre-commit-config.yaml

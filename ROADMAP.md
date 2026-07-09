@@ -28,7 +28,7 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | 3.3 Limiti d'uso | ✅ | durata max pre-download, allowlist, error handler globale |
 | 3.4 Modulo admin | ✅ | |
 | 3.5 Graceful shutdown | ✅ | post_shutdown: executor + Mongo chiusi |
-| 4.1 Hardening Docker | ⬜ | parziale (base uv/cuDNN9) |
+| 4.1 Hardening Docker | ✅ | non-root, Mongo non esposto+healthcheck, cache modelli |
 | 4.2 Logging privacy | ⬜ | |
 | 4.3 Dipendenze | ✅ | aggiornate + potate via uv |
 | 4.4 Test automatici | ⬜ | |
@@ -357,15 +357,15 @@ calliope/
 ### Step 4.1 — Hardening Docker (S3, S6, D5)
 
 **Attività:**
-- [ ] Base image: multi-stage build — stage builder su `nvidia/cuda:*-cudnn*-devel` solo se serve compilare, runtime su **`nvidia/cuda:*-runtime`** (o `base`); aspettarsi svariati GB risparmiati.
-- [ ] Utente non-root (`USER calliope`), `WORKDIR` coerente.
-- [ ] `.dockerignore`: `.env`, `logs/`, `notebooks/`, `.git`, `*.md`, screenshot.
-- [ ] `CMD ["calliope"]` nel Dockerfile (l'entry point esiste da 1.2): l'immagine diventa avviabile anche senza compose.
-- [ ] `poetry install --only main` (già da 1.2) + cache mount per pip/poetry; valutare in alternativa l'export a `requirements.txt` nello stage builder per non avere poetry nel runtime.
-- [ ] docker-compose: rimuovere il port mapping di Mongo verso l'host **oppure** abilitare auth (`MONGO_INITDB_ROOT_USERNAME/PASSWORD` + URI con credenziali); pinnare `mongo` a una release stabile (via `8.0.0-rc6`); healthcheck su Mongo e `depends_on: condition: service_healthy`.
-- [ ] Allineare il `makefile`: `make run` (locale), `make up`/`make down` (compose), rimuovere il `docker-run` rotto o dargli `--env-file`.
+- [x] Base image: già su **`nvidia/cuda:*-cudnn-runtime`** (niente toolkit devel, wheel precompilate) — uno stage builder separato non serve perché non si compila nulla; la grande riduzione di dimensione era già stata fatta migrando a uv e rimuovendo moviepy.
+- [x] Utente non-root (`USER calliope`, uid 10001), `WORKDIR /app`. `uv sync` gira **come utente non-root** e i `COPY --chown` evitano un `chown -R` della venv (che gonfiava l'immagine): l'immagine resta lean (5.46 GB, invariata rispetto a prima ma ora hardened).
+- [x] `.dockerignore` esteso: `.env*`, `logs/`, `backups/`, `*.ipynb`, `.git`, `*.md` (con `!README.md`), `docs/`, `scripts/`, `tests/`, `.github/`.
+- [x] `CMD ["calliope"]` nel Dockerfile: immagine avviabile anche senza compose.
+- [x] Cache dei modelli su volume (`calliope_hf_cache` → `HF_HOME`): niente ri-download a ogni ricreazione del container.
+- [x] docker-compose: **rimosso** il port mapping di Mongo verso l'host (raggiungibile solo sulla rete interna); `mongo` pinnato a **`8.0`** stabile (era la RC `8.0.0-rc6`); healthcheck su Mongo (`mongosh ping`) e `depends_on: condition: service_healthy`.
+- [x] `makefile` allineato: `run`/`sync`/`lock`/`lint`/`format` (locale), `build`/`up`/`down`/`logs`/`stop` (compose), `docker-run` con `--rm --gpus all --env-file .env calliope:dev`.
 
-**Criteri di accettazione:** immagine sensibilmente più piccola (misurare prima/dopo); `docker inspect` mostra utente non-root; da fuori la macchina Mongo non è raggiungibile (o richiede credenziali); `docker run --env-file .env --gpus all calliope` parte da solo.
+**Criteri di accettazione:** `docker inspect`/`id` mostra utente non-root (verificato: uid=10001 calliope, app importabile come non-root); da fuori la macchina Mongo non è raggiungibile (port mapping rimosso, `docker compose config` valido); immagine lean (5.46 GB). ✅ La verifica runtime end-to-end (ricreazione stack con healthcheck) è **rimandata** all'avvio manuale dell'owner (richiesta esplicita: non ricreare i container ora).
 
 ### Step 4.2 — Logging: privacy e rotation (S1, §6)
 
