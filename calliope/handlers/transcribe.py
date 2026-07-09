@@ -16,13 +16,7 @@ from telegram.ext import ContextTypes
 from calliope.media.silence import detect_silence
 from calliope.notifier import notify_error, notify_registration
 from calliope.settings import settings
-from calliope.storage.mongo import calliope_db_init
 from calliope.transcription.formatting import split_message
-from calliope.transcription.whisper import WhisperInferenceModel
-
-calliope_db = calliope_db_init()
-
-whisper = WhisperInferenceModel()
 
 
 def message_type(update):
@@ -64,6 +58,9 @@ async def _send_or_edit_with_retry(operation, *, max_attempts: int = 5):
 async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"Request from: {update.message.from_user.username}")
 
+    storage = context.bot_data["storage"]
+    transcriber = context.bot_data["transcriber"]
+
     # get audio from message
     with tempfile.TemporaryDirectory() as temp_dir:
         logger.info(temp_dir)
@@ -103,14 +100,14 @@ async def stt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     # Solo l'uso reale (audio con parlato) viene conteggiato nelle statistiche.
-    registration = calliope_db.update(update, duration)
+    registration = storage.update(update, duration)
     if registration:
         await notify_registration(context.bot, registration, update)
 
     try:
         start_time = time.time()
-        language = calliope_db.get_language(update) or settings.default_language
-        segments = whisper.transcribe(audio, language=language)
+        language = storage.get_language(update) or settings.default_language
+        segments = transcriber.transcribe(audio, language=language)
         full_transcription = ""
 
         current_message = await update.message.reply_text(

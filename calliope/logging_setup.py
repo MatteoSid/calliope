@@ -1,31 +1,27 @@
 import sys
-from datetime import datetime
 
 from loguru import logger
 
-from calliope.settings import settings
+from calliope.settings import Settings
+
+LOG_FORMAT = (
+    "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+    "<level>{level: <8}</level> | "
+    "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+    "<level>{message}</level>"
+)
 
 
-def logger_setter() -> None:
-    level = settings.log_level.upper()
-    if level == "DEBUG":
-        logger.configure(
-            handlers=[
-                {
-                    "sink": sys.stdout,
-                    "format": "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> |"
-                    " <level>{level: <8}</level> |"
-                    " <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> -"
-                    " <level>{message}</level>",
-                    "colorize": True,
-                    "level": "DEBUG",
-                },
-            ]
-        )
-    else:
-        logger.remove(0)
-        logger.add(
-            f"logs/{datetime.now().strftime('%Y-%m-%d_%H-%M')}.log",
-            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
-            level=level,
-        )
+def setup_logging(settings: Settings) -> None:
+    """Configura loguru con un sink su stdout (catturato da Docker).
+
+    Sostituisce il fragile ``logger.remove(0)`` con ``logger.remove()``. La
+    rotation/retention su file e l'audit di privacy sono nello step 4.2.
+    """
+    logger.remove()
+    logger.add(
+        sys.stdout,
+        format=LOG_FORMAT,
+        level=settings.log_level.upper(),
+        colorize=True,
+    )

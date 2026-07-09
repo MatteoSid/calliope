@@ -1,31 +1,27 @@
 from datetime import datetime
-from functools import lru_cache
 
 import pymongo
 from loguru import logger
 
-from calliope.settings import settings
+from calliope.settings import Settings
 
 
-@lru_cache
-def calliope_db_init():
-    return MongoWriter()
+class MongoStorage:
+    """Accesso a MongoDB per utenti, gruppi e statistiche.
 
+    Istanziato una sola volta all'avvio e iniettato negli handler. Se la
+    connessione fallisce resta in modalità degradata (``client`` = None) e i
+    metodi loggano l'errore senza sollevare.
+    """
 
-class MongoWriter:
-    def __init__(self) -> None:
+    def __init__(self, settings: Settings) -> None:
         self.client: pymongo.MongoClient | None = None
         try:
             self.client = pymongo.MongoClient(settings.mongo_uri)
             self.client.server_info()  # Check connection
             self.db = self.client[settings.mongo_db_name]
-
-            # single users collection
             self.users_collection = self.db[settings.mongo_users_collection]
-
-            # groups collection
             self.groups_collection = self.db[settings.mongo_groups_collection]
-
             logger.info(f"Connected to MongoDB at {settings.mongo_uri}")
         except Exception:
             self.client = None

@@ -1,38 +1,33 @@
-import threading
-
 import ctranslate2
 import numpy as np
 from faster_whisper import WhisperModel
 from loguru import logger
 
-from calliope.settings import settings
-
-if settings.device == "auto":
-    device = "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
-else:
-    device = settings.device
-logger.info(f"Using {'GPU' if device == 'cuda' else 'CPU'}")
+from calliope.settings import Settings
 
 
-class WhisperInferenceModel:
-    _instance = None
-    _lock = threading.Lock()
+class WhisperTranscriber:
+    """Motore di trascrizione basato su faster-whisper.
 
-    def __new__(cls):
-        with cls._lock:
-            if cls._instance is None:
-                logger.info("Loading model...")
-                cls._instance = super().__new__(cls)
-                cls._instance._initialize()
-                logger.info("Model loaded.")
-        return cls._instance
+    Va istanziato una sola volta all'avvio (in ``main``) e iniettato negli
+    handler: l'``__init__`` sceglie il device e carica il modello (operazione
+    costosa, nessun side effect a import-time).
+    """
 
-    def _initialize(self):
+    def __init__(self, settings: Settings) -> None:
         self.model_name = settings.whisper_model
-        self.device = device
+        self.device = self._resolve_device(settings)
+        logger.info(f"Loading model {self.model_name} on {self.device}...")
         self.model = WhisperModel(
             self.model_name, device=self.device, device_index=settings.device_index
         )
+        logger.info("Model loaded.")
+
+    @staticmethod
+    def _resolve_device(settings: Settings) -> str:
+        if settings.device == "auto":
+            return "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
+        return settings.device
 
     def transcribe(self, file_audio, language: str | None = None):
         """Trascrive l'audio.

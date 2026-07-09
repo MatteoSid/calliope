@@ -17,11 +17,7 @@ from telegram.error import Forbidden, TelegramError
 from telegram.ext import ContextTypes
 
 from calliope.notifier import is_admin, notify_error
-from calliope.storage.mongo import calliope_db_init
 from calliope.transcription.formatting import format_timedelta
-from calliope.transcription.whisper import WhisperInferenceModel
-
-calliope_db = calliope_db_init()
 
 # ~20 msg/s: sotto il limite complessivo dell'API Bot (~30 msg/s).
 BROADCAST_THROTTLE_S = 0.05
@@ -57,7 +53,8 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    stats = calliope_db.global_stats()
+    storage = context.bot_data["storage"]
+    stats = storage.global_stats()
     if not stats:
         await update.message.reply_text("Stats unavailable (database not reachable).")
         return
@@ -76,12 +73,12 @@ async def _admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     start_time = context.bot_data.get("start_time")
     uptime = format_timedelta(datetime.now() - start_time) if start_time else "unknown"
 
-    whisper = WhisperInferenceModel()  # singleton già caricato all'avvio
+    transcriber = context.bot_data["transcriber"]
     await update.message.reply_text(
         "🩺 Status\n\n"
         f"Uptime: {uptime}\n"
-        f"Model: {whisper.model_name}\n"
-        f"Device: {whisper.device}"
+        f"Model: {transcriber.model_name}\n"
+        f"Device: {transcriber.device}"
     )
 
 
@@ -92,7 +89,8 @@ async def _admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text("Usage: /admin broadcast <message>")
         return
 
-    users, groups = calliope_db.get_all_chat_ids()
+    storage = context.bot_data["storage"]
+    users, groups = storage.get_all_chat_ids()
     total = len(users) + len(groups)
     if total == 0:
         await update.message.reply_text("No recipients registered yet.")
@@ -133,7 +131,8 @@ async def broadcast_callback(
 
     await query.edit_message_text("📣 Broadcasting…")
 
-    users, groups = calliope_db.get_all_chat_ids()
+    storage = context.bot_data["storage"]
+    users, groups = storage.get_all_chat_ids()
     sent, failed = 0, 0
     for chat_id in users + groups:
         try:

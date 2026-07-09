@@ -17,15 +17,10 @@ from calliope.handlers.start import start
 from calliope.handlers.stats import stats
 from calliope.handlers.timestamp import timestamp
 from calliope.handlers.transcribe import stt
-from calliope.logging_setup import logger_setter
+from calliope.logging_setup import setup_logging
 from calliope.settings import settings
-from calliope.storage.mongo import calliope_db_init
-
-logger_setter()
-
-calliope_db = calliope_db_init()
-
-logger.info("Starting Calliope")
+from calliope.storage.mongo import MongoStorage
+from calliope.transcription.whisper import WhisperTranscriber
 
 # Comandi mostrati nel menu di Telegram (impostati all'avvio via set_my_commands).
 BOT_COMMANDS = [
@@ -43,8 +38,17 @@ async def _post_init(application: Application) -> None:
 
 
 def main() -> None:
-    """Start the bot."""
-    # Create the Application and pass it your bot's token.
+    """Bootstrap esplicito: logging → storage → modello → application.
+
+    Tutte le risorse costose sono create qui (nessun side effect a import-time)
+    e iniettate negli handler tramite ``application.bot_data``.
+    """
+    setup_logging(settings)
+    logger.info("Starting Calliope")
+
+    storage = MongoStorage(settings)
+    transcriber = WhisperTranscriber(settings)
+
     application = (
         Application.builder()
         .token(settings.telegram_token.get_secret_value())
@@ -53,6 +57,12 @@ def main() -> None:
         .post_init(_post_init)
         .build()
     )
+
+    # Dependency injection: gli handler leggono queste chiavi da context.bot_data.
+    application.bot_data["settings"] = settings
+    application.bot_data["storage"] = storage
+    application.bot_data["transcriber"] = transcriber
+
     logger.info("Application is running")
 
     # on different commands - answer in Telegram

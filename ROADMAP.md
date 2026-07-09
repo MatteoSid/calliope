@@ -15,7 +15,7 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | 1.2 Struttura package | ✅ | handlers/transcription/media/storage; entry point `calliope` |
 | 1.3 Tooling ruff/mypy | ✅ | ruff+mypy+pre-commit verdi |
 | 1.4 Config pydantic-settings | ✅ | `calliope/settings.py` |
-| 1.5 Bootstrap esplicito | ⬜ | |
+| 1.5 Bootstrap esplicito | ✅ | DI via bot_data, no side effect import-time |
 | 2.1 Storage riscritto | ⬜ | |
 | 2.2 `/lang` end-to-end | ✅ | |
 | 2.3 Device detection | ⬜ | parziale (usa ctranslate2) |
@@ -171,12 +171,12 @@ calliope/
 **Obiettivo:** importare un modulo di Calliope non deve fare nulla; tutto succede in `main()`.
 
 **Attività:**
-- [ ] `main.py` con sequenza esplicita: `settings = Settings()` → `setup_logging(settings)` → `storage = MongoStorage(settings)` → `transcriber = WhisperTranscriber(settings)` → costruzione `Application`.
-- [ ] Iniettare le dipendenze negli handler via `application.bot_data["storage"] = storage` ecc. (o partial/closure); rimuovere `calliope_db_init()` + `lru_cache`, il `__new__` singleton di `WhisperInferenceModel` e tutte le istanziazioni a livello di modulo in `handlers/*`.
-- [ ] `setup_logging`: sink stdout sempre (siamo in Docker), file opzionale con `rotation`/`retention` (vedi 4.2); rimuovere il fragile `logger.remove(0)` a favore di `logger.remove()`.
-- [ ] Il caricamento del modello Whisper avviene una sola volta in `main()`, con log del device scelto.
+- [x] `main.py` con sequenza esplicita: `setup_logging(settings)` → `storage = MongoStorage(settings)` → `transcriber = WhisperTranscriber(settings)` → costruzione `Application` (il `settings` globale validato resta il punto unico di config, 1.4).
+- [x] Iniettate le dipendenze via `application.bot_data["storage"|"transcriber"|"settings"]`; rimossi `calliope_db_init()` + `lru_cache`, il `__new__` singleton (→ `WhisperTranscriber` normale) e tutte le istanziazioni a livello di modulo negli handler.
+- [x] `setup_logging`: sink stdout sempre; `logger.remove()` al posto di `logger.remove(0)` (rotation su file rimandata a 4.2).
+- [x] Il modello Whisper è caricato una sola volta in `main()`, con log di modello e device.
 
-**Criteri di accettazione:** `python -c "import calliope.handlers.transcribe"` non carica il modello, non tocca Mongo, non parsea argv, non stampa banner; smoke test 0.1 verde.
+**Criteri di accettazione:** `python -c "import calliope.handlers.transcribe"` non carica il modello, non tocca Mongo, non parsea argv, non stampa banner (verificato in container); bootstrap esplicito e avvio verde. ✅
 
 ---
 
