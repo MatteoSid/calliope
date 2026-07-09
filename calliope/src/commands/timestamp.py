@@ -11,6 +11,7 @@ from telegram.ext import ContextTypes
 from calliope.settings import settings
 from calliope.src.models.inference_model import WhisperInferenceModel
 from calliope.src.utils.MongoClient import calliope_db_init
+from calliope.src.utils.utils import detect_silence
 
 whisper = WhisperInferenceModel()
 calliope_db = calliope_db_init()
@@ -36,6 +37,14 @@ async def timestamp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         audio.write_audiofile(file_audio_path, verbose=False, logger=None)
 
         audio, sr = librosa.load(file_audio_path)
+
+    # Pre-filtro: video senza parlato → reaction 🔇, nessuna trascrizione.
+    if detect_silence(audio, sr):
+        logger.info(
+            f"{update.message.from_user.username}: silent video, skipping transcription"
+        )
+        await update.message.set_reaction("🔇")
+        return
 
     # Chiama il metodo che lavora direttamente con audio e sample rate
     language = calliope_db.get_language(update) or settings.default_language
