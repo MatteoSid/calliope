@@ -31,8 +31,8 @@ Legenda: ✅ completato · 🚧 in corso · ⬜ da fare
 | 4.1 Hardening Docker | ✅ | non-root, Mongo non esposto+healthcheck, cache modelli |
 | 4.2 Logging privacy | ✅ | niente testo trascrizione nei log, sink file con rotation |
 | 4.3 Dipendenze | ✅ | aggiornate + potate via uv |
-| 4.4 Test automatici | ⬜ | |
-| 4.5 CI | ⬜ | |
+| 4.4 Test automatici | ✅ | pytest+mongomock, 56 test verdi, regressioni C1/C2/C5/C7/C9 |
+| 4.5 CI | ⬜ | rimandato (richiesta owner) |
 | 4.6 Documentazione | ⬜ | |
 
 ## Come usare questo documento
@@ -394,19 +394,20 @@ calliope/
 *Reso possibile dalle fasi 1-2 (dipendenze iniettate, moduli puri).*
 
 **Attività:**
-- [ ] `pytest` + `pytest-asyncio` nel gruppo dev; struttura `tests/` speculare al package.
-- [ ] Unit test sui moduli puri (nessun mock pesante necessario):
-  - [ ] `split_message`: bordi esatti a 4096, testo senza spazi, testo vuoto, unicode;
-  - [ ] formattazione timestamp (`transcribe_with_timestamps` → estrarre la parte pura di bucketing/formatting e testarla: parole a cavallo del minuto, audio < 1 min, trascrizione vuota);
-  - [ ] `detect_silence` con audio sintetico (numpy): tutto muto, tutto parlato, silenzio solo in coda/testa, ai bordi della soglia;
-  - [ ] `format_timedelta` e la formattazione di `/stats` (dati singolo utente e classifica gruppo);
-  - [ ] validazione codici lingua di `/lang`;
-  - [ ] `Settings`: default, override da env, errore senza token.
-- [ ] Test dello storage con `mongomock` (o testcontainers se si preferisce fedeltà): upsert idempotente, incrementi corretti per voice/video note, `get_language` sui casi limite, aggregazioni di `/stats` e `/admin stats`.
-- [ ] Test degli handler con `Update`/`Context` finti (PTB fornisce oggetti costruibili a mano): happy path `/start`, `/help`, `/lang`, `/stats`, media oltre il limite di durata; un comando `/admin` da un utente non autorizzato viene ignorato senza risposta.
-- [ ] Coverage minima concordata (suggerito: 70% sui moduli non-handler).
+- [x] `pytest` + `pytest-asyncio` (+ `mongomock`) nel gruppo dev; `asyncio_mode = "auto"`; struttura `tests/` con fixture condivisi in `conftest.py`.
+- [x] Unit test sui moduli puri:
+  - [x] `split_message`: testo vuoto, bordo esatto a 4096, over-boundary multi-parte, parola lunga senza spazi, unicode (`test_formatting.py`);
+  - [x] `detect_silence` con audio sintetico numpy: tutto muto, tutto parlato, silenzio solo in coda/testa, array vuoto, bordo soglia, soglia da settings (`test_silence.py`);
+  - [x] `format_timedelta` (0/negativo/secondi/minuti/ore/giorni) (`test_formatting.py`);
+  - [x] validazione codici lingua di `/lang` (`test_handlers.py`);
+  - [x] `Settings`: default, errore senza token, secret non esposto, opzionali vuoti → None, parsing `allowed_chat_ids` (`test_settings.py`);
+  - [x] estrazione media: `_extract_attachment`, `_to_seconds`, limite durata pre-download (`test_extract.py`).
+- [x] Storage con `mongomock`: `add_user` idempotente, incrementi con durata (C2), `get_language` sui casi limite (C7), aggregazioni globali, `get_all_chat_ids`, modalità degradata (`test_storage.py`). *Nota:* l'incremento per-membro dei gruppi usa array filters non implementati da mongomock → coperto dal test d'integrazione su Mongo reale (2.1); qui si verifica creazione gruppo + registrazione membro.
+- [x] Handler con `Update`/`Context` finti: `/start`, `/lang` (valido/invalido/auto/no-arg), `/admin` da non autorizzato ignorato + owner ottiene l'help (`test_handlers.py`).
+- [~] Coverage: strumentazione `pytest-cov` non aggiunta (evitare dipendenze extra); le regressioni chiave hanno test dedicati.
+- [x] Streaming a intervalli + retry flood control (`test_streaming.py`), plumbing async del transcriber (`test_whisper.py`).
 
-**Criteri di accettazione:** `pytest` verde in locale e senza GPU/Mongo/rete; i bug fixati in Fase 2 hanno ciascuno un test di regressione (C1, C2, C5, C7, C9).
+**Criteri di accettazione:** `pytest` verde in locale senza GPU/Mongo/rete (56 test, 0.7s, mongomock + fake objects); i bug di Fase 2 hanno un test di regressione — **C1** (lingua passata al modello: `test_whisper`/`test_handlers`), **C2** (durata negli incrementi: `test_storage`), **C5** (retry flood control: `test_streaming`), **C7** (`get_language` robusto: `test_storage`), **C9** (validazione `Settings`: `test_settings`). ✅
 
 ### Step 4.5 — CI (§6)
 
